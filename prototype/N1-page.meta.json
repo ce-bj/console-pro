@@ -1,0 +1,42 @@
+{
+  "page": "VisitorInsightsPage",
+  "route": "/console/visitors",
+  "dataSources": [
+    {
+      "name": "mockVisitorStats",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/visitors/stats" },
+      "queryParams": ["time_range", "source", "type", "tenant_id"]
+    },
+    {
+      "name": "mockVisitorsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/visitors" },
+      "queryParams": ["tenant_id", "time_range", "source", "type", "page", "pageSize"]
+    },
+    {
+      "name": "mockVisitorEventsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/visitors/{visitor_id}/events" },
+      "queryParams": []
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleFetchVisitorEvents",
+      "endpoint": { "method": "GET", "path": "/api/visitors/{visitor_id}/events" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleInitiateConversation",
+      "endpoint": { "method": "POST", "path": "/api/sessions" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    }
+  ],
+  "externalServices": {
+    "agentscope": "AGENTSCOPE_URL (IP 待定)",
+    "backend": "BACKEND_URL"
+  }
+}

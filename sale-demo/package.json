@@ -1,0 +1,27 @@
+{
+  "name": "sale-demo",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "bash start.sh",
+    "dev": "npx serve public --listen 8002",
+    "server": "node server/index.js",
+    "seed": "node seed-data.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.0.2",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.2",
+    "express": "^4.22.2",
+    "pg": "^8.21.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "vite": "^8.0.14"
+  }
+}

@@ -1,0 +1,211 @@
+{
+  "page": "AgentConfigPage",
+  "route": "/agent",
+  "dataSources": [
+    {
+      "name": "mockAgentConfig",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/config" }
+    },
+    {
+      "name": "mockKnowledgeDirectoriesData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/knowledge-directories" }
+    },
+    {
+      "name": "mockSkills",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/skills" }
+    },
+    {
+      "name": "mockTriggers",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/triggers" }
+    },
+    {
+      "name": "mockFormFields",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/forms/fields" }
+    },
+    {
+      "name": "mockSalesStagesData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/skills/pre-sales/config" }
+    },
+    {
+      "name": "mockTalkScenariosData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/skills/pre-sales/talk-scenarios" }
+    },
+    {
+      "name": "mockIndustryGlossaryData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/skills/pre-sales/industry-glossary" },
+      "queryParams": ["keyword"]
+    },
+    {
+      "name": "mockSalesEventsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/skills/pre-sales/config" }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleSaveConfig",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/config" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleToggleSkill",
+      "endpoint": { "method": "PATCH", "path": "/api/agents/{agent_id}/skills/{skill_key}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleToggleTrigger",
+      "endpoint": { "method": "PATCH", "path": "/api/agents/{agent_id}/triggers/{trigger_key}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFetchKnowledgeDirectories",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/knowledge-directories" },
+      "requestFrom": "none",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleToggleKnowledgeDirectory",
+      "endpoint": { "method": "PATCH", "path": "/api/agents/{agent_id}/knowledge-directories/{directory_id}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleUpdateField",
+      "endpoint": { "method": "PATCH", "path": "/api/forms/fields/{field_key}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleAddField",
+      "endpoint": { "method": "POST", "path": "/api/forms/fields" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSaveLeadCapture",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/lead-capture" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFetchPreSalesConfig",
+      "endpoint": { "method": "GET", "path": "/api/agents/{agent_id}/skills/pre-sales/config" },
+      "requestFrom": "none",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSavePreSalesConfig",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/skills/pre-sales/config" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleRestorePreSalesDefaults",
+      "endpoint": { "method": "POST", "path": "/api/agents/{agent_id}/skills/pre-sales/config/defaults" },
+      "requestFrom": "none",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSaveSalesStage",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/skills/pre-sales/stages/{stage_key}" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleToggleSalesStage",
+      "endpoint": { "method": "PATCH", "path": "/api/agents/{agent_id}/skills/pre-sales/stages/{stage_key}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSaveSalesProgressScoring",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/skills/sales-progress/scoring" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSaveSalesEvent",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/skills/pre-sales/events/{event_key}" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCreateSalesEvent",
+      "endpoint": { "method": "POST", "path": "/api/agents/{agent_id}/skills/pre-sales/events" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleDeleteSalesEvent",
+      "endpoint": { "method": "DELETE", "path": "/api/agents/{agent_id}/skills/pre-sales/events/{event_key}" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleToggleSalesEvent",
+      "endpoint": { "method": "PATCH", "path": "/api/agents/{agent_id}/skills/pre-sales/events/{event_key}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSaveTalkTrack",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/skills/pre-sales/talk-scenarios/{talk_key}" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCreateTalkTrack",
+      "endpoint": { "method": "POST", "path": "/api/agents/{agent_id}/skills/pre-sales/talk-scenarios" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleImportTalkTracks",
+      "endpoint": { "method": "POST", "path": "/api/agents/{agent_id}/skills/pre-sales/talk-scenarios/import" },
+      "requestFrom": "form",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleDeleteTalkTrack",
+      "endpoint": { "method": "DELETE", "path": "/api/agents/{agent_id}/skills/pre-sales/talk-scenarios/{talk_key}" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleSaveGlossaryTerm",
+      "endpoint": { "method": "PUT", "path": "/api/agents/{agent_id}/skills/pre-sales/industry-glossary/{term_id}" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCreateGlossaryTerm",
+      "endpoint": { "method": "POST", "path": "/api/agents/{agent_id}/skills/pre-sales/industry-glossary" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleImportGlossaryTerms",
+      "endpoint": { "method": "POST", "path": "/api/agents/{agent_id}/skills/pre-sales/industry-glossary/import" },
+      "requestFrom": "form",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleDeleteGlossaryTerm",
+      "endpoint": { "method": "DELETE", "path": "/api/agents/{agent_id}/skills/pre-sales/industry-glossary/{term_id}" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    }
+  ],
+  "bindingPolicy": "N3 is the customer-facing maintenance entry for sales talk scripts, multilingual terms, and special situations; all page changes are synchronized to the specified enterprise knowledge-base directory. Talk scripts are classified as system presets or company-created: system presets can only be enabled, disabled, or copied into a company item; company items can be created, imported, edited, and deleted. Talk-template upload columns are title, useWhen, replyText, and nextQuestion; an imported item needs a stage binding in N3 before use. Multilingual terms have no system presets and are created, imported, edited, and deleted in N3. Special situations are not talk-script bindings: they define the interruption route when a customer leaves normal sales progression, including resolution measure, return destination, and guidance-resume policy. Only the handoff route has a wait state: default one minute plus a required timeout fallback. Previous-stage, specified-stage, and reassess routes configure immediate resume, resume when the analysis agent detects new customer information or willingness, or no more proactive guidance in the current conversation; no route uses fixed conversation-round waiting. The end route has no follow-up fields. Changing the return route clears fields that no longer apply. The main agent still replies using current question, knowledge, and talk configuration. Customers may enable or disable the six preset sales stages and add, edit, or remove stage criteria. The customer-progress skill uses only those stage criteria as scoring items: customers may assign each criterion a score and set the stage threshold, while required-condition validation, stage continuity, event priorities, and tool routes remain runtime rules."
+}

@@ -1,0 +1,108 @@
+{
+  "_comment": "Mock 数据，对应 N3 智能体配置中三个部分：需求类型识别、意向打分、渐进式留资。后续由 prototype 真实数据替换，修改此文件立即生效（每次调用时重新读取，无需重启服务）。",
+
+  "demand_type": {
+    "_section": "N3 技能设置 · 需求类型识别",
+    "mode": "preset",
+    "_mode_options": "preset（从 categories 列表中选最匹配的一项）| llm（LLM 自由输出 ≤10 字描述）",
+    "categories": ["价格咨询", "案例索取", "功能咨询", "信息披露", "购买意向"]
+  },
+
+  "intent_scoring": {
+    "_section": "N3 意向与情绪 · 意向打分",
+    "mode": "preset",
+    "_mode_options": "preset（维度权重模式）| llm（LLM 综合评估模式，忽略 dimensions，可填 llm_hint）",
+    "dimensions": [
+      { "key": "pricing_inquiry",  "label": "主动询价或对比版本",       "weight": 30 },
+      { "key": "explicit_intent",  "label": "明确表达购买/采购意图",     "weight": 30 },
+      { "key": "cta_engagement",   "label": "主动要求 Demo 或联系销售", "weight": 25 },
+      { "key": "lead_completeness","label": "主动透露公司或联系方式",     "weight": 15 }
+    ],
+    "thresholds": {
+      "high": 75,
+      "medium": 45
+    },
+    "llm_hint": "侧重判断访客是否有真实采购意图和决策权，忽略单纯的信息浏览行为。"
+  },
+
+  "lead_capture": {
+    "_section": "N3 技能设置 · 意向收集 · 渐进式留资配置",
+    "timing": "progressive",
+    "_timing_options": "progressive（多轮逐步收集）| form_fallback（一次性弹表单）",
+    "trigger_rounds": 4,
+    "_trigger_rounds_note": "对话推进至 N 轮且命中意向关键词时引导留资",
+    "fields": [
+      {
+        "field_key": "name",
+        "label": "姓名",
+        "type": "text",
+        "required": true,
+        "placeholder": "您的姓名",
+        "crm_field": "Person.name",
+        "enabled": true,
+        "order": 1
+      },
+      {
+        "field_key": "phone",
+        "label": "手机号",
+        "type": "tel",
+        "required": true,
+        "placeholder": "+86 手机号",
+        "crm_field": "Person.phones.primaryPhoneNumber",
+        "enabled": true,
+        "order": 2
+      },
+      {
+        "field_key": "email",
+        "label": "邮箱",
+        "type": "email",
+        "required": false,
+        "placeholder": "邮箱地址（选填）",
+        "crm_field": "Person.emails.primaryEmail",
+        "enabled": true,
+        "order": 3
+      },
+      {
+        "field_key": "company",
+        "label": "公司名称",
+        "type": "text",
+        "required": false,
+        "placeholder": "公司名称（选填）",
+        "crm_field": "Company.name",
+        "enabled": true,
+        "order": 4
+      },
+      {
+        "field_key": "job_title",
+        "label": "岗位",
+        "type": "text",
+        "required": false,
+        "placeholder": "您的岗位（选填）",
+        "crm_field": "Person.jobTitle",
+        "enabled": true,
+        "order": 5
+      },
+      {
+        "field_key": "budget",
+        "label": "预算区间",
+        "type": "select",
+        "required": false,
+        "placeholder": "请选择",
+        "options": ["10万以内", "10–50万", "50–100万", "100万以上"],
+        "crm_field": "custom_fields.budget",
+        "enabled": false,
+        "order": 6
+      },
+      {
+        "field_key": "pain_point",
+        "label": "主要痛点",
+        "type": "textarea",
+        "required": false,
+        "placeholder": "简单描述您的需求（选填）",
+        "crm_field": "custom_fields.pain_point",
+        "enabled": false,
+        "order": 7
+      }
+    ]
+  }
+}

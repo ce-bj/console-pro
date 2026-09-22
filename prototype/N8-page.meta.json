@@ -1,0 +1,62 @@
+{
+  "page": "TicketWorkbenchPage",
+  "route": "/console/tickets",
+  "dataSources": [
+    {
+      "name": "mockTicketStats",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/tickets/stats" },
+      "queryParams": ["tenant_id"]
+    },
+    {
+      "name": "mockTicketsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/tickets" },
+      "queryParams": ["status", "priority", "category", "sla_state", "assignee", "page", "pageSize"]
+    },
+    {
+      "name": "mockTicketDetailData",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/tickets/{ticket_id}" },
+      "queryParams": []
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleUpdateTicket",
+      "endpoint": { "method": "PATCH", "path": "/api/tickets/{ticket_id}" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleAddNote",
+      "endpoint": { "method": "POST", "path": "/api/tickets/{ticket_id}/notes" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCloseTicket",
+      "endpoint": { "method": "POST", "path": "/api/tickets/{ticket_id}/close" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleReopenTicket",
+      "endpoint": { "method": "POST", "path": "/api/tickets/{ticket_id}/reopen" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleViewTicketDetail",
+      "endpoint": { "method": "GET", "path": "/api/tickets/{ticket_id}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    }
+  ],
+  "externalServices": {
+    "agentscope": "AGENTSCOPE_URL (IP 待定) — 工单自动建单、摘要抽取、根因关键词由 AgentScope 2.0 提供",
+    "twentycrm": "TWENTYCRM_URL (IP 待定) — 工单写入 TwentyCRM 自定义对象 Ticket",
+    "backend": "BACKEND_URL"
+  },
+  "csatNote": "handleCloseTicket 触发 CSAT 调研推送（工单关闭 → 发送满意度问卷 → 回收后更新 csat 表）"
+}

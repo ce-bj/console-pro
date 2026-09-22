@@ -1,0 +1,73 @@
+{
+  "page": "Customer360Page",
+  "route": "/console/customers/:unified_id",
+  "dataSources": [
+    {
+      "name": "mockCustomerData",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/customers/{unified_id}" },
+      "queryParams": []
+    },
+    {
+      "name": "mockCustomerEventsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/customers/{unified_id}/events" },
+      "queryParams": []
+    },
+    {
+      "name": "mockCustomerSessionsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/customers/{unified_id}/sessions" },
+      "queryParams": []
+    },
+    {
+      "name": "mockSessionMessagesData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/sessions/{session_id}/messages" },
+      "queryParams": []
+    },
+    {
+      "name": "mockCustomerProfileData",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/customers/{unified_id}/profile" },
+      "queryParams": []
+    },
+    {
+      "name": "mockCustomerTicketsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/customers/{unified_id}/tickets" },
+      "queryParams": []
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleConvertToLead",
+      "endpoint": { "method": "POST", "path": "/api/leads" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCreateTicket",
+      "endpoint": { "method": "POST", "path": "/api/tickets" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleInitiateConversation",
+      "endpoint": { "method": "POST", "path": "/api/sessions" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleViewSessionDetail",
+      "endpoint": { "method": "GET", "path": "/api/sessions/{session_id}/messages" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    }
+  ],
+  "externalServices": {
+    "agentscope": "AGENTSCOPE_URL (IP 待定) — 对话由 AgentScope 2.0 Agent Service 提供",
+    "twentycrm": "TWENTYCRM_URL (IP 待定) — 客户 Person/Company/Opportunity 从此同步",
+    "backend": "BACKEND_URL"
+  }
+}

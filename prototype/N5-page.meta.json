@@ -1,0 +1,147 @@
+{
+  "page": "CatalogPage",
+  "route": "/knowledge-config/catalog",
+  "dataSources": [
+    {
+      "name": "mockKnowledgeAssetsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/assets" },
+      "queryParams": ["section", "status", "connect", "knowledgeBaseType", "industry", "primaryCategory", "secondaryCategory", "contentFormat", "validityStatus", "timeliness", "audience", "language", "tag", "keyword", "page", "pageSize"]
+    },
+    {
+      "name": "mockFrontendSiteStructureData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/frontend-site-structure" },
+      "queryParams": ["siteIds"]
+    },
+    {
+      "name": "mockBackendPageSourcesData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/source-pages/backend" },
+      "queryParams": ["section", "keyword"]
+    },
+    {
+      "name": "mockRepairLogData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/repair-logs" },
+      "queryParams": ["assetId", "limit"]
+    },
+    {
+      "name": "mockAssetOpLogsData",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/kb/assets/operation-logs" },
+      "queryParams": ["assetId"]
+    },
+    {
+      "name": "mockHitStats",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/kb/assets/hit-stats" },
+      "queryParams": ["dateRange"]
+    },
+    {
+      "name": "mockUnansweredData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/unanswered" },
+      "queryParams": ["status", "page", "pageSize"]
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleFetchKnowledgeAssets",
+      "endpoint": { "method": "GET", "path": "/api/kb/assets" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleFetchFrontendSiteStructure",
+      "endpoint": { "method": "GET", "path": "/api/kb/frontend-site-structure" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleCreateAssetsFromFrontendPages",
+      "endpoint": { "method": "POST", "path": "/api/kb/assets/from-frontend-pages" },
+      "requestFrom": "body",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleFetchBackendPageSources",
+      "endpoint": { "method": "GET", "path": "/api/kb/source-pages/backend" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleCreateAssetsFromBackendPages",
+      "endpoint": { "method": "POST", "path": "/api/kb/assets/from-backend-pages" },
+      "requestFrom": "body",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleUpdateKnowledgeAssetMetadata",
+      "endpoint": { "method": "PUT", "path": "/api/kb/assets/{id}" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFetchRepairLogs",
+      "endpoint": { "method": "GET", "path": "/api/kb/repair-logs" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleCreateRepairLog",
+      "endpoint": { "method": "POST", "path": "/api/kb/repair-logs" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleRelearnKnowledgeAsset",
+      "endpoint": { "method": "POST", "path": "/api/kb/assets/{id}/relearn" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleDeleteKnowledgeAsset",
+      "endpoint": { "method": "DELETE", "path": "/api/kb/assets/{id}" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleBatchUpdateKnowledgeAssets",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/assets/batch-metadata" },
+      "requestFrom": "body",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleBatchTransitionKnowledgeAssets",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/assets/batch-status" },
+      "requestFrom": "body",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleBatchRelearnKnowledgeAssets",
+      "endpoint": { "method": "POST", "path": "/api/kb/assets/batch-relearn" },
+      "requestFrom": "body",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleBatchToggleKnowledgeAssets",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/assets/batch-enabled" },
+      "requestFrom": "body",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleBatchDeleteKnowledgeAssets",
+      "endpoint": { "method": "DELETE", "path": "/api/kb/assets/batch" },
+      "requestFrom": "body",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleFormTransition",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/assets/{id}/status" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    }
+  ],
+  "dataSourceNote": "N5 知识资产目录现在以 前台网站结构 -> 前台页面 -> 知识资产 为主入口。前台页面路由、导航路径、页面数据类型和结构化字段写入知识元数据，用于回答溯源与页面上下文判断；知识健康体检在目录页以可筛选、可勾选的后台任务运行，结果作为体检记录长期回看并支持逐条修复。"
+}

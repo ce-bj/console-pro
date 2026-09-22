@@ -1,0 +1,60 @@
+{
+  "page": "AgentObservabilityDetailPage",
+  "route": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}",
+  "layout": "Agent operational and quality KPI summary plus Session list with filters and full-page drilldown",
+  "dataSources": [
+    {
+      "name": "mockObservabilitySessions",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/sessions"
+      },
+      "queryParams": [
+        "tenantId",
+        "agentId",
+        "timeRange",
+        "toolType",
+        "ragStatus",
+        "feedback",
+        "keyword",
+        "page",
+        "pageSize"
+      ],
+      "fields": [
+        "sessionId",
+        "createdAt",
+        "summary",
+        "duration",
+        "userId",
+        "traceCount",
+        "quality",
+        "Tool and child Agent",
+        "RAG usage",
+        "feedback"
+      ],
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "viewSession",
+      "endpoint": {
+        "method": "CLIENT_NAVIGATION",
+        "path": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/sessions/{sessionId}"
+      },
+      "requestFrom": "path",
+      "responseShape": "page"
+    },
+    {
+      "handler": "jumpToConversation",
+      "endpoint": null,
+      "requestFrom": "disabled",
+      "responseShape": "not implemented"
+    }
+  ],
+  "notes": "The page preserves key operational, quality, Tool, RAG, feedback and business KPIs above the Session list. It does not add a separate reference-example area; the first Session and first Trace contain complete prototype evidence for direct review. Trace rows are not expanded inline. Version and configuration fields remain hidden. Session、Trace 及 Observation 详细证据默认仅保留最近 30 天；页面持续显示保留期提示。到期删除明细后，每日聚合指标与历史趋势继续保留。"
+}

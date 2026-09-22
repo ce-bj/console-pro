@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Anvil · 企业 AI Agent 市场 — 3 个方向对比</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #ece9e0; font-family: "Inter", "Noto Sans SC", system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+
+  /* Intensity-driven feel knobs */
+  [data-intensity="restrained"] h1 { letter-spacing: 0 !important; }
+  [data-intensity="restrained"] h1 { transform: scale(0.92); transform-origin: top left; }
+  [data-intensity="bold"] h1 { letter-spacing: -1.6px !important; }
+  [data-intensity="bold"] h1 { transform: scale(1.06); transform-origin: top left; }
+
+  /* Glow on accent surfaces — applied to elements we tag manually + on any dark hero card */
+  [data-intensity="bold"] .accent-glow,
+  [data-intensity="bold"] [class*="hero-dark"] {
+    box-shadow: 0 30px 80px -20px var(--glow-color, #d4571a99) !important;
+  }
+
+  /* Saturation: applied via filter on artboard contents (subtle so text stays readable) */
+  [data-intensity="restrained"] [data-dc-artboard] { filter: saturate(0.75); }
+  [data-intensity="bold"]       [data-dc-artboard] { filter: saturate(1.25); }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="demo/design-canvas.jsx"></script>
+<script type="text/babel" src="demo/tweaks-panel.jsx"></script>
+<script type="text/babel" src="demo/tweaks-config.jsx"></script>
+<script type="text/babel" src="demo/data.jsx"></script>
+<script type="text/babel" src="demo/variant-a.jsx"></script>
+<script type="text/babel" src="demo/variant-b-core.jsx"></script>
+<script type="text/babel" src="demo/variant-b-home.jsx"></script>
+<script type="text/babel" src="demo/variant-b-pages.jsx"></script>
+<script type="text/babel" src="demo/variant-c-core.jsx"></script>
+<script type="text/babel" src="demo/variant-c-home.jsx"></script>
+<script type="text/babel" src="demo/variant-c-pages.jsx"></script>
+
+<script type="text/babel" data-presets="react">
+function App() {
+  const [tweaks, setTweak] = window.useTweaks(window.TWEAK_DEFAULTS);
+  const ctxValue = React.useMemo(() => window.buildTweakValue(tweaks), [tweaks]);
+
+  // Intensity → CSS variables on wrapper so we can tweak hero scale + glow + saturation globally.
+  const wrapStyle = {
+    '--intensity-scale': ctxValue.intensityScale,
+    '--intensity-sat': ctxValue.intensitySat,
+    '--intensity-glow': ctxValue.intensityGlow,
+  };
+
+  return (
+    <window.TweaksCtx.Provider value={ctxValue}>
+      <div data-intensity={tweaks.intensity} style={wrapStyle}>
+        <window.DesignCanvas>
+          <window.DCSection
+            id="portal-directions"
+            title="Anvil · 企业 AI Agent 售卖门户"
+            subtitle="3 个方向 · 每个方向 4 个可点击页面 (首页 / Agent 市场 / Agent 详情 / 客户案例)"
+          >
+            <window.DCArtboard id="variant-a" label="A · 编辑极简风" width={1280} height={800}>
+              <window.VariantA />
+            </window.DCArtboard>
+            <window.DCArtboard id="variant-b" label="B · 数据企业风" width={1280} height={800}>
+              <window.VariantB />
+            </window.DCArtboard>
+            <window.DCArtboard id="variant-c" label="C · 现代产品风" width={1280} height={800}>
+              <window.VariantC />
+            </window.DCArtboard>
+          </window.DCSection>
+        </window.DesignCanvas>
+      </div>
+
+      <window.TweaksPanel title="设计调谐器">
+        <window.TweakSection label="品牌气质" />
+        <window.TweakRadio
+          label="标题字体"
+          value={tweaks.vibe}
+          options={Object.entries(window.VIBES).map(([k,v]) => ({value: k, label: v.label}))}
+          onChange={(v) => setTweak('vibe', v)}
+        />
+        <window.TweakSection label="强调色调" />
+        <window.TweakColor
+          label="调色板"
+          value={window.PALETTES[tweaks.palette].swatches}
+          options={Object.values(window.PALETTES).map(p => p.swatches)}
+          onChange={(v) => {
+            const key = Object.keys(window.PALETTES).find(k => window.PALETTES[k].swatches.join() === v.join());
+            if (key) setTweak('palette', key);
+          }}
+        />
+        <window.TweakSection label="表达强度" />
+        <window.TweakRadio
+          label="整体张力"
+          value={tweaks.intensity}
+          options={Object.entries(window.INTENSITIES).map(([k,v]) => ({value: k, label: v.label}))}
+          onChange={(v) => setTweak('intensity', v)}
+        />
+      </window.TweaksPanel>
+    </window.TweaksCtx.Provider>
+  );
+}
+
+// Wait for all script tags to finish loading their globals.
+function mount() {
+  if (!window.VariantA || !window.VariantB || !window.VariantC || !window.DesignCanvas || !window.TweaksPanel || !window.useTweaks) {
+    return setTimeout(mount, 50);
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+}
+mount();
+</script>
+</body>
+</html>

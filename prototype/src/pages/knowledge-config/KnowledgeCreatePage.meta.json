@@ -1,0 +1,13 @@
+{
+  "page": "KnowledgeCreatePage",
+  "route": "/knowledge-config/catalog/new",
+  "dataSources": [
+    { "name": "mockFrontendPageSourcesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/frontend-site-structure" } },
+    { "name": "mockBackendPageSourcesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/source-pages/backend" } },
+    { "name": "mockPlatformKnowledgeSourcesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/industry-library" } }
+  ],
+  "actions": [
+    { "handler": "handleCreateKnowledgeDrafts", "endpoint": { "method": "POST", "path": "/api/kb/assets/batch" }, "requestFrom": "body", "responseShape": "array" },
+    { "handler": "handleCreatePlatformIndustryKnowledgeDrafts", "endpoint": { "method": "POST", "path": "/api/platform/industry-knowledge/batch" }, "requestFrom": "body", "responseShape": "array" }
+  ]
+}

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operator Test Demo — 售前 AI 副驾</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; min-width: 1120px; font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 13px; color: #172033; background: #f4f6fa; }
+  .header { height: 52px; padding: 0 20px; display: flex; align-items: center; gap: 12px; color: #fff; background: #1e293b; }
+  .header h1 { margin: 0; font-size: 15px; font-weight: 600; }
+  .header .tag { padding: 3px 8px; border-radius: 12px; color: #dbeafe; background: #334155; font-size: 11px; }
+  .header .note { margin-left: auto; color: #cbd5e1; font-size: 12px; }
+  .layout { display: grid; grid-template-columns: 224px minmax(420px, 1fr) 378px; height: calc(100vh - 52px); min-height: 700px; overflow: hidden; }
+  .sessions, .copilot { overflow-y: auto; background: #fff; }
+  .sessions { border-right: 1px solid #e5e7eb; }
+  .chat { min-width: 0; display: flex; flex-direction: column; background: #f4f7fb; }
+  .copilot { border-left: 1px solid #e5e7eb; }
+  .panel-title { height: 44px; padding: 0 14px; display: flex; align-items: center; justify-content: space-between; color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: .04em; border-bottom: 1px solid #edf0f5; }
+  .session { padding: 12px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+  .session.active { padding-left: 11px; background: #eff6ff; border-left: 3px solid #2563eb; }
+  .session-name { color: #1e293b; font-size: 13px; font-weight: 600; }
+  .session-meta { margin-top: 5px; color: #64748b; font-size: 11px; line-height: 1.5; }
+  .session-stage { display: inline-block; margin-top: 6px; padding: 2px 6px; color: #1d4ed8; background: #dbeafe; border-radius: 4px; font-size: 10px; }
+  .session-alert { display: inline-block; margin-left: 4px; padding: 2px 6px; color: #9a3412; background: #ffedd5; border-radius: 4px; font-size: 10px; }
+  .toolbar { height: 52px; padding: 0 16px; display: flex; align-items: center; gap: 10px; background: #fff; border-bottom: 1px solid #e5e7eb; }
+  .toolbar .visitor { flex: 1; }
+  .toolbar .visitor strong { display: block; color: #1e293b; font-size: 13px; }
+  .toolbar .visitor span { color: #94a3b8; font-size: 11px; }
+  button { border: 1px solid #dbe1ea; border-radius: 6px; padding: 6px 10px; color: #475569; background: #fff; cursor: pointer; font-size: 12px; }
+  button:hover { border-color: #93c5fd; color: #1d4ed8; background: #eff6ff; }
+  button.primary { color: #fff; border-color: #2563eb; background: #2563eb; }
+  .messages { flex: 1; padding: 18px; overflow-y: auto; }
+  .date-line { margin: 4px 0 16px; color: #94a3b8; font-size: 11px; text-align: center; }
+  .message { display: flex; max-width: 82%; margin: 0 0 14px; gap: 8px; }
+  .message.user { flex-direction: row-reverse; margin-left: auto; }
+  .avatar { display: grid; width: 28px; height: 28px; flex: 0 0 28px; place-items: center; border-radius: 50%; color: #1d4ed8; background: #dbeafe; font-size: 13px; }
+  .message.user .avatar { color: #047857; background: #d1fae5; }
+  .bubble { padding: 9px 12px; color: #334155; line-height: 1.65; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px 12px 12px 3px; }
+  .message.user .bubble { color: #fff; background: #2563eb; border-color: #2563eb; border-radius: 12px 12px 3px 12px; }
+  .message-label { margin-bottom: 3px; color: #94a3b8; font-size: 10px; }
+  .message.user .message-label { text-align: right; }
+  .input-bar { padding: 11px 14px; display: flex; gap: 8px; background: #fff; border-top: 1px solid #e5e7eb; }
+  .input-bar div { flex: 1; padding: 9px 11px; color: #94a3b8; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px; font-size: 12px; }
+  .section { padding: 14px; border-bottom: 1px solid #edf0f5; }
+  .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: #334155; font-size: 12px; font-weight: 700; }
+  .small-muted { color: #94a3b8; font-size: 10px; font-weight: 400; }
+  .analysis-status { display: flex; align-items: center; gap: 6px; padding: 7px 9px; color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; font-size: 11px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; }
+  .demand-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .demand-name { color: #1e293b; font-size: 13px; font-weight: 600; }
+  .chip { display: inline-block; padding: 3px 7px; border: 1px solid; border-radius: 10px; font-size: 10px; white-space: nowrap; }
+  .chip.blue { color: #1d4ed8; background: #eff6ff; border-color: #bfdbfe; }
+  .chip.orange { color: #9a3412; background: #fff7ed; border-color: #fed7aa; }
+  .chip.green { color: #166534; background: #f0fdf4; border-color: #bbf7d0; }
+  .chip.gray { color: #64748b; background: #f8fafc; border-color: #e2e8f0; }
+  .stage-caption { margin: 4px 0 10px; color: #64748b; font-size: 11px; }
+  .stage-line { display: flex; align-items: flex-start; justify-content: space-between; position: relative; margin: 15px 2px 0; }
+  .stage-line::before { content: ""; position: absolute; top: 8px; left: 8px; right: 8px; height: 2px; background: #e2e8f0; z-index: 0; }
+  .stage-step { z-index: 1; width: 48px; padding: 0; cursor: pointer; color: inherit; background: transparent; border: 0; border-radius: 0; font-family: inherit; text-align: center; }
+  .stage-dot { display: grid; width: 18px; height: 18px; margin: 0 auto 5px; place-items: center; border: 2px solid #cbd5e1; border-radius: 50%; color: #fff; background: #fff; font-size: 10px; }
+  .stage-step.done .stage-dot { border-color: #22c55e; background: #22c55e; }
+  .stage-step.current .stage-dot { border-color: #2563eb; background: #2563eb; box-shadow: 0 0 0 4px #dbeafe; }
+  .stage-step .name { color: #94a3b8; font-size: 9px; line-height: 1.25; }
+  .stage-step.done .name { color: #15803d; }
+  .stage-step.current .name { color: #1d4ed8; font-weight: 700; }
+  .stage-step:hover .stage-dot, .stage-step.selected .stage-dot { border-color: #7c3aed; box-shadow: 0 0 0 4px #ede9fe; }
+  .stage-step.selected .name { color: #6d28d9; font-weight: 700; }
+  .stage-summary { margin-top: 15px; padding: 9px 10px; background: #f8fafc; border-radius: 7px; }
+  .stage-summary strong { color: #1e3a8a; font-size: 12px; }
+  .stage-summary p { margin: 4px 0 0; color: #64748b; font-size: 11px; line-height: 1.55; }
+  .route-card { padding: 10px; border: 1px solid #fed7aa; border-radius: 8px; background: #fff7ed; }
+  .route-card.normal { border-color: #bfdbfe; background: #eff6ff; }
+  .route-title { display: flex; align-items: center; justify-content: space-between; color: #9a3412; font-weight: 700; }
+  .route-card.normal .route-title { color: #1d4ed8; }
+  .route-label { margin-top: 8px; color: #64748b; font-size: 10px; }
+  .route-value { margin-top: 2px; color: #334155; font-size: 11px; line-height: 1.5; }
+  .evidence-list { display: grid; gap: 7px; }
+  .evidence { padding: 8px 9px; border: 1px solid #e2e8f0; border-radius: 7px; }
+  .evidence-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px; }
+  .evidence-name { color: #334155; font-size: 11px; font-weight: 600; }
+  .evidence-quote { color: #64748b; font-size: 11px; line-height: 1.45; }
+  .empty-evidence { padding: 12px 8px; color: #94a3b8; text-align: center; font-size: 11px; }
+  .suggestion-item { width: 100%; margin-bottom: 7px; padding: 9px 10px; text-align: left; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 7px; line-height: 1.55; }
+  .suggestion-item:last-child { margin-bottom: 0; }
+  .suggestion-item:hover { color: #1e3a8a; background: #eff6ff; border-color: #93c5fd; }
+  .suggestion-type { display: block; margin-bottom: 3px; color: #6366f1; font-size: 10px; font-weight: 700; }
+  @media (max-width: 1180px) { .layout { grid-template-columns: 200px minmax(390px, 1fr) 350px; } .stage-step { width: 44px; } }
+</style>
+</head>
+<body>
+  <header class="header">
+    <h1>🎧 坐席工作台 · 售前 AI 副驾</h1>
+    <span class="tag">operator-test-demo.html</span>
+    <span class="note">静态原型 · 真实页面按会话分析结果实时刷新</span>
+  </header>
+
+  <main class="layout">
+    <aside class="sessions">
+      <div class="panel-title"><span>活跃会话</span><span>4</span></div>
+      <div class="session" data-scenario="normal" onclick="selectScenario('normal')">
+        <div class="session-name">王工 · 河南灌区改造</div>
+        <div class="session-meta">刚咨询远程启闭与水位监测</div>
+        <span class="session-stage">S2 条件澄清</span>
+      </div>
+      <div class="session active" data-scenario="quote" onclick="selectScenario('quote')">
+        <div class="session-name">李经理 · 设备采购</div>
+        <div class="session-meta">首轮直接索要报价单</div>
+        <span class="session-stage">S1 需求发现</span><span class="session-alert">直接询价</span>
+      </div>
+      <div class="session" data-scenario="handoff" onclick="selectScenario('handoff')">
+        <div class="session-name">陈女士 · 产品咨询</div>
+        <div class="session-meta">明确要求销售人工联系</div>
+        <span class="session-stage">S0 接待</span><span class="session-alert">要求人工</span>
+      </div>
+      <div class="session" data-scenario="afterSales" onclick="selectScenario('afterSales')">
+        <div class="session-name">赵先生 · 已购设备维修</div>
+        <div class="session-meta">咨询设备故障与售后处理</div>
+        <span class="session-stage" style="color:#64748b;background:#f1f5f9">售后场景</span>
+      </div>
+    </aside>
+
+    <section class="chat">
+      <div class="toolbar">
+        <div class="visitor"><strong id="visitorName">王工 · 河南灌区改造</strong><span id="visitorMeta">会话 #S-20260904-0108 · AI 服务中</span></div>
+        <button>查看线索</button><button class="primary">人工接管</button>
+      </div>
+      <div class="messages" id="messages"></div>
+      <div class="input-bar"><div>以坐席身份发送消息…</div><button class="primary">发送</button></div>
+    </section>
+
+    <aside class="copilot">
+      <div class="panel-title"><span>AI 副驾</span><span class="small-muted" id="analysisTime"></span></div>
+      <div class="section">
+        <div class="section-heading" style="margin-bottom:8px"><span>对话识别</span><span class="chip" id="conversationScene"></span></div>
+        <div class="demand-row"><span class="small-muted">需求类型</span><span class="demand-name" id="demandType"></span></div>
+        <div class="demand-row" style="margin-top:7px"><span class="small-muted">意向判断</span><span class="chip" id="intentLevel"></span></div>
+      </div>
+
+      <div id="preSalesContent">
+        <div class="section">
+          <div class="section-heading"><span>售前成熟度</span><span class="chip blue" id="stageBadge"></span></div>
+          <div class="stage-line" id="stageLine"></div>
+        </div>
+
+        <div class="section" id="routeSection">
+          <div class="section-heading"><span id="routeSectionTitle">当前异常</span><span class="small-muted" id="routeSectionHint"></span></div>
+          <div id="routeCard"></div>
+        </div>
+
+        <div class="section">
+          <div class="section-heading"><span id="stageEvidenceTitle">阶段对话证据</span><span class="small-muted">点击上方阶段查看</span></div>
+          <div class="evidence-list" id="stageEvidenceList"></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-heading"><span>分析 Agent 推荐回复</span><span class="small-muted">历史功能 · 3 条</span></div>
+        <div id="recommendationList"></div>
+      </div>
+    </aside>
+  </main>
+
+<script>
+const STAGES = [
+  { id: 'S0', name: '接待' }, { id: 'S1', name: '需求' }, { id: 'S2', name: '条件' },
+  { id: 'S3', name: '方案' }, { id: 'S4', name: '行动' }, { id: 'S5', name: '交接' }
+];
+let activeScenario = null;
+let selectedStageId = null;
+
+const scenarios = {
+  normal: {
+    visitor: '王工 · 河南灌区改造', meta: '会话 #S-20260904-0108 · AI 服务中', time: '第 4 轮 · 刚刚更新',
+    isPreSales: true,
+    demand: '选型与方案咨询', intent: '中意向 · 58 分', terms: '远程启闭、水位监测', stage: 'S2',
+    caption: '当前阶段：S2 条件澄清 · 下一阶段：S3 方案匹配',
+    goal: '阶段目标：获得影响初步方案判断的关键条件',
+    reason: '已确认使用场景与控制需求；项目背景已知，仍缺采购时间或数量。',
+    route: { normal: true, title: '正常售前推进', badge: '无异常', measure: '先回答当前问题，再补充一个关键条件', after: '本轮回答后继续 S2 条件澄清' },
+    evidence: [
+      { name: '使用场景', quote: '“我们在做农田灌溉渠道改造。”', tag: '客户原话' },
+      { name: '关键约束', quote: '“希望远程开关，最好以后还能看水位。”', tag: '客户原话' },
+      { name: '项目背景', quote: '“项目在河南新乡，渠道大概 2 米宽。”', tag: '客户原话' }
+    ],
+    stageEvidence: {
+      S0: [{ name: '进入会话', quote: '访客开始咨询闸门采购与选型方向。', tag: '对话第 1 轮' }],
+      S1: [{ name: '核心问题', quote: '“想采购闸门，但还没确定用哪种。”', tag: '访客原话' }, { name: '使用场景', quote: '“我们在做农田灌溉渠道改造。”', tag: '访客原话' }],
+      S2: [{ name: '关键约束', quote: '“希望远程开关，最好以后还能看水位。”', tag: '访客原话' }, { name: '项目背景', quote: '“项目在河南新乡，渠道大概 2 米宽。”', tag: '访客原话' }],
+      S3: [], S4: [], S5: []
+    },
+    recommendations: [
+      { type: '顾问式澄清', text: '结合渠道改造和远程控制需求，可以优先按智能测控一体化方向评估。预计需要多少套，计划什么时候投入使用？' },
+      { type: '参数确认', text: '如果数量暂时不确定，也可以先给一个大致范围，我会按范围帮您判断配置和交付准备项。' },
+      { type: '资料补充', text: '后续如有渠道断面图或现场照片，也可以继续发来，顾问会结合资料进一步确认。' }
+    ],
+    missing: ['采购数量或时间'], action: '回答选型问题 + 确认采购计划',
+    actionDesc: '调用知识库说明可匹配的方案方向，再只追问一个与报价和交付有关的条件。',
+    reply: '结合渠道改造和远程控制需求，可以优先按智能测控一体化方向评估。预计需要多少套，计划什么时候投入使用？',
+    messages: [
+      ['user', '我们在做农田灌溉渠道改造，想采购闸门，但还没确定用哪种。'],
+      ['bot', '可以协助您先缩小选型范围。您更关注远程自动启闭、普通电动启闭，还是只配启闭机？'],
+      ['user', '希望远程开关，最好以后还能看水位。项目在河南新乡，渠道大概 2 米宽。'],
+      ['bot', '了解。结合渠道改造和远程控制需求，可以优先按智能测控一体化方向评估。预计需要多少套，计划什么时候投入使用？']
+    ]
+  },
+  quote: {
+    visitor: '李经理 · 设备采购', meta: '会话 #S-20260904-0112 · AI 服务中', time: '第 1 轮 · 刚刚更新',
+    isPreSales: true,
+    demand: '价格与报价咨询', intent: '高意向 · 82 分', terms: '报价单', stage: 'S1',
+    caption: '成熟度保持：S1 需求发现 · 快捷路线：直接询价',
+    goal: '阶段目标：明确核心问题和使用场景',
+    reason: '客户明确索要报价，但尚未说明产品、数量或规格；不能直接跳过前置阶段。',
+    route: { normal: false, title: '特殊情况：直接询价或索要报价单', badge: '报价快捷路线', measure: '说明公开价格口径，只补问一项最缺的报价条件', after: '转到 S2 条件澄清；当前问题处理后立即继续' },
+    evidence: [{ name: '报价请求', quote: '“给我发一份闸门报价单。”', tag: '客户原话' }],
+    stageEvidence: {
+      S0: [{ name: '进入会话', quote: '访客首轮直接提出报价请求。', tag: '对话第 1 轮' }],
+      S1: [{ name: '当前需求', quote: '“给我发一份闸门报价单。”', tag: '访客原话' }],
+      S2: [], S3: [], S4: [], S5: []
+    },
+    recommendations: [
+      { type: '报价承接', text: '可以为您整理报价。实际价格会根据规格、数量和服务范围确定，方便先确认一下预计数量吗？' },
+      { type: '低门槛澄清', text: '如果数量还没定，也可以先告诉我大概的项目规模，我会先帮您整理报价需要确认的项目。' },
+      { type: '人工协同', text: '如需更快确认商务口径，也可以安排销售顾问直接与您沟通。' }
+    ],
+    missing: ['产品型号或用途', '预计数量', '主要规格'], action: '承接报价申请 + 确认数量',
+    actionDesc: '先说明报价需要以规格和数量为准，当前仅使用一个确认动作收集预计数量。',
+    reply: '可以为您整理报价。实际价格会根据规格、数量和服务范围确定，方便先确认一下预计数量吗？',
+    messages: [
+      ['user', '给我发一份闸门报价单。'],
+      ['bot', '可以为您整理报价。实际价格会根据规格、数量和服务范围确定，方便先确认一下预计数量吗？']
+    ]
+  },
+  handoff: {
+    visitor: '陈女士 · 产品咨询', meta: '会话 #S-20260904-0115 · 等待人工接待', time: '第 2 轮 · 刚刚更新',
+    isPreSales: true,
+    demand: '产品与能力了解', intent: '高意向 · 76 分', terms: '销售联系', stage: 'S0',
+    caption: '成熟度保持：S0 接待与建立信任 · 当前暂停售前推进',
+    goal: '阶段目标：让客户愿意说明问题',
+    reason: '客户明确要求销售人工联系；尚未形成需求和场景证据，阶段不前移。',
+    route: { normal: false, title: '特殊情况：要求人工或联系方式', badge: '人工接待', measure: '立即转人工或提供已公开联系方式，暂停 AI 售前推进', after: '等待人工 1 分钟；超时后提示客户留下联系方式' },
+    evidence: [{ name: '人工请求', quote: '“把销售电话给我，我想直接问产品。”', tag: '客户原话' }],
+    stageEvidence: {
+      S0: [{ name: '人工请求', quote: '“把销售电话给我，我想直接问产品。”', tag: '访客原话' }],
+      S1: [], S2: [], S3: [], S4: [], S5: []
+    },
+    recommendations: [
+      { type: '转接确认', text: '好的，已为您转接销售顾问，对方会结合您的问题继续沟通。' },
+      { type: '公开渠道说明', text: '销售顾问会在工作时间内优先联系您；您也可以留下方便联系的方式，避免错过回复。' },
+      { type: '等待兜底', text: '如暂时忙线，我会继续保留当前问题，方便顾问接入后直接了解情况。' }
+    ],
+    missing: ['产品或使用场景'], action: '请求人工接管',
+    actionDesc: '调用转人工能力；本轮不再追问需求、不追加留资表单。',
+    reply: '好的，已为您转接销售顾问。对方会结合您的问题继续沟通；如暂时忙线，我会提示您留下方便联系的方式。',
+    messages: [
+      ['user', '把销售电话给我，我想直接问产品。'],
+      ['bot', '好的，已为您转接销售顾问。对方会结合您的问题继续沟通；如暂时忙线，我会提示您留下方便联系的方式。']
+    ]
+  },
+  afterSales: {
+    visitor: '赵先生 · 已购设备维修', meta: '会话 #S-20260904-0118 · AI 服务中', time: '第 3 轮 · 刚刚更新',
+    isPreSales: false,
+    demand: '售后与问题处理', intent: '不参与售前意向判断', terms: '螺杆启闭机、限位故障',
+    recommendations: [
+      { type: '信息补充', text: '为了帮助您更快排查，方便提供一下设备型号、故障现象和发生时间吗？' },
+      { type: '安全提醒', text: '如设备仍在运行，请先按现场安全规范停止操作，避免继续带故障运行。' },
+      { type: '工单承接', text: '我可以为您登记售后处理信息，并安排技术人员进一步确认。' }
+    ],
+    messages: [
+      ['user', '我们去年买的螺杆启闭机现在到限位位置还不停，怎么处理？'],
+      ['bot', '收到，这属于设备运行异常。为便于判断，方便提供一下设备型号、故障现象和发生时间吗？'],
+      ['user', '型号我晚点发，现在已经先停机了。'],
+      ['bot', '好的，先停机是合适的。您补充型号后，我会协助登记并安排技术人员进一步确认。']
+    ]
+  }
+};
+
+function selectScenario(key) {
+  document.querySelectorAll('.session').forEach(el => el.classList.toggle('active', el.dataset.scenario === key));
+  activeScenario = scenarios[key];
+  selectedStageId = activeScenario.stage;
+  renderScenario(activeScenario);
+}
+
+function selectStage(stageId) {
+  selectedStageId = stageId;
+  renderScenario(activeScenario);
+}
+
+function renderScenario(data) {
+  document.getElementById('visitorName').textContent = data.visitor;
+  document.getElementById('visitorMeta').textContent = data.meta;
+  document.getElementById('analysisTime').textContent = data.time;
+  document.getElementById('demandType').textContent = data.demand;
+  const intent = document.getElementById('intentLevel');
+  intent.textContent = data.intent;
+  intent.className = `chip ${data.isPreSales ? 'blue' : 'gray'}`;
+  const scene = document.getElementById('conversationScene');
+  scene.textContent = data.isPreSales ? '售前场景' : '非售前场景';
+  scene.className = `chip ${data.isPreSales ? 'blue' : 'gray'}`;
+  document.getElementById('preSalesContent').style.display = data.isPreSales ? '' : 'none';
+  if (data.isPreSales) {
+    document.getElementById('stageBadge').textContent = data.stage + ' 当前阶段';
+    const currentIndex = STAGES.findIndex(stage => stage.id === data.stage);
+    document.getElementById('stageLine').innerHTML = STAGES.map((stage, index) => {
+      const state = index < currentIndex ? 'done' : index === currentIndex ? 'current' : '';
+      const mark = index < currentIndex ? '✓' : index === currentIndex ? '●' : '';
+      const selected = selectedStageId === stage.id ? 'selected' : '';
+      return `<button class="stage-step ${state} ${selected}" onclick="selectStage('${stage.id}')" title="查看 ${stage.id} ${stage.name} 的对话证据"><span class="stage-dot">${mark}</span><span class="name">${stage.id}<br>${stage.name}</span></button>`;
+    }).join('');
+    const routeTitle = document.getElementById('routeSectionTitle');
+    const routeHint = document.getElementById('routeSectionHint');
+    const routeCard = document.getElementById('routeCard');
+    if (data.route.normal) {
+      routeTitle.textContent = '当前状态';
+      routeHint.textContent = '未触发异常';
+      routeCard.innerHTML = '<div class="analysis-status"><span class="dot"></span><span>正常售前推进中</span></div>';
+    } else {
+      routeTitle.textContent = '当前异常';
+      routeHint.textContent = '成熟度不改变';
+      routeCard.innerHTML = `
+        <div class="route-card">
+          <div class="route-title"><span>${data.route.title}</span><span class="chip orange">${data.route.badge}</span></div>
+          <div class="route-label">处理方式</div><div class="route-value">${data.route.measure}</div>
+          <div class="route-label">处理后</div><div class="route-value">${data.route.after}</div>
+        </div>`;
+    }
+    const stage = STAGES.find(item => item.id === selectedStageId);
+    const stageEvidence = data.stageEvidence[selectedStageId] || [];
+    document.getElementById('stageEvidenceTitle').textContent = `${stage.id} ${stage.name} · 对话证据`;
+    document.getElementById('stageEvidenceList').innerHTML = stageEvidence.length
+      ? stageEvidence.map(item => `<div class="evidence"><div class="evidence-top"><span class="evidence-name">${item.name}</span><span class="chip green">${item.tag}</span></div><div class="evidence-quote">${item.quote}</div></div>`).join('')
+      : '<div class="empty-evidence">该阶段暂未达到，尚无可展示的对话证据。</div>';
+  }
+  document.getElementById('recommendationList').innerHTML = data.recommendations.map((item, index) =>
+    `<button class="suggestion-item" onclick="useRecommendation('${data.recommendations[index].text.replace(/'/g, "\\'")}')"><span class="suggestion-type">${item.type}</span>${item.text}</button>`
+  ).join('');
+  document.getElementById('messages').innerHTML = `<div class="date-line">今天 14:26 · ${data.isPreSales ? '售前对话示例' : '通用客服对话示例'}</div>` + data.messages.map(([role, text]) => {
+    const isUser = role === 'user';
+    return `<div class="message ${isUser ? 'user' : 'bot'}"><div class="avatar">${isUser ? '访' : 'AI'}</div><div><div class="message-label">${isUser ? '访客' : 'Anvil 智能客服'}</div><div class="bubble">${text}</div></div></div>`;
+  }).join('');
+}
+
+function useRecommendation(text) {
+  alert('已选择推荐回复：\n\n' + text);
+}
+
+selectScenario('quote');
+</script>
+</body>
+</html>

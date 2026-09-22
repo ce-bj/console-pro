@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Anvil · 企业 AI Agent 市场 — 埋点 Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  html, body { margin: 0; padding: 0; background: #f7f5f0; font-family: "Inter", "Noto Sans SC", system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+</style>
+
+<!-- ① 埋点 SDK — 普通 JS，最先加载，在页面 load 前就开始监听 -->
+<script src="tracker/portal-tracker.js?v=3"></script>
+
+<!-- 调试面板 — 录制/停止/清空，实时展示采集到的事件 -->
+<script src="debug/debug-panel.js?v=3"></script>
+
+<!-- ② CRM 智能助手对话弹窗 — 在 tracker 之后加载，可读取 visitor_id -->
+<script src="widget/chat-widget.js?v=2"></script>
+</head>
+<body>
+
+<div id="root"></div>
+
+<!-- ② React 18 + ReactDOM (CDN) -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" crossorigin></script>
+
+<!-- ③ Babel Standalone — 在浏览器端编译 JSX -->
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" crossorigin></script>
+
+<!-- ④ 数据层：AGENTS / STATS / CASES / CATEGORIES → window.xxx -->
+<script type="text/babel" src="demo/data.jsx"></script>
+
+<!-- ⑤ 主题配置：TweaksCtx / TWEAK_DEFAULTS / buildTweakValue → window.xxx -->
+<script type="text/babel" src="demo/tweaks-config.jsx"></script>
+
+<!-- ⑥ 可滚动 Variant A 组件 → window.VariantA -->
+<script type="text/babel" src="demo/demo-variant-a.jsx"></script>
+
+<!-- ⑦ App 挂载 -->
+<script type="text/babel" data-presets="react">
+function App() {
+  // 用默认主题配置，不显示调谐面板
+  const ctxValue = React.useMemo(
+    () => window.buildTweakValue(window.TWEAK_DEFAULTS),
+    []
+  );
+  return (
+    <window.TweaksCtx.Provider value={ctxValue}>
+      <window.VariantA />
+    </window.TweaksCtx.Provider>
+  );
+}
+
+// 等所有 Babel 脚本就绪（Babel Standalone 是异步执行的）
+function mount() {
+  if (!window.VariantA || !window.TweaksCtx || !window.buildTweakValue) {
+    return setTimeout(mount, 50);
+  }
+  ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+}
+mount();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,61 @@
+{
+  "page": "LeadPoolPage",
+  "route": "/console/leads",
+  "dataSources": [
+    {
+      "name": "mockLeadStatusCounts",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/leads/counts" },
+      "queryParams": []
+    },
+    {
+      "name": "mockLeadsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/leads" },
+      "queryParams": ["status", "intent", "source", "q", "page", "pageSize"]
+    },
+    {
+      "name": "mockLeadDetailData",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/leads/{lead_id}" },
+      "queryParams": []
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleConvertToCustomer",
+      "endpoint": { "method": "POST", "path": "/api/leads/{lead_id}/convert" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSyncToCRM",
+      "endpoint": { "method": "POST", "path": "/api/leads/crm-sync" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleBatchSyncToCRM",
+      "endpoint": { "method": "POST", "path": "/api/leads/crm-sync" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleViewLeadDetail",
+      "endpoint": { "method": "GET", "path": "/api/leads/{lead_id}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleMarkInvalid",
+      "endpoint": { "method": "PATCH", "path": "/api/leads/{lead_id}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    }
+  ],
+  "externalServices": {
+    "twentycrm": "TWENTYCRM_URL (IP 待定) — CRM Adapter 将线索写入 TwentyCRM Person/Company/Opportunity",
+    "backend": "BACKEND_URL"
+  },
+  "crmSyncNote": "handleSyncToCRM → BACKEND_URL/api/leads/crm-sync → CRM Adapter → TWENTYCRM_URL/rest/people。状态通过 Webhook 或轮询更新。"
+}

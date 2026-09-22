@@ -1,0 +1,160 @@
+{
+  "name": "工作流B：Anvil 页面转化诊断 Agent (M1+M3)",
+  "nodes": [
+    {
+      "id": "node-trigger",
+      "name": "手动触发",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300],
+      "parameters": {}
+    },
+    {
+      "id": "node-agent",
+      "name": "诊断 Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [300, 300],
+      "parameters": {
+        "systemMessage": "你是一个门户网站转化率诊断专家 Agent。你的任务是分析网站埋点数据，找出转化漏点，并给出可执行的优化建议。\n\n【可用工具】\n- query_page_metrics：返回各页面的会话数、平均加载耗时、真实跳出率、平均停留时长、平均滚动深度、移动端占比。无需参数，直接调用。\n- query_visitor：返回单个访客的访问次数、浏览页面、CTA点击数、定价页访问次数等事实标签。需要传入 visitor_id 参数。\n\n【工作步骤】\n1. 先调用 query_page_metrics，拿到所有页面的指标。\n2. 找出 real_bounce_rate 最高、或 avg_load_ms 明显偏高的页面。\n3. 做跨维度归因：结合加载耗时、移动端占比、滚动深度，推断跳出的真实原因。\n   例如：加载耗时 > 4000ms 很可能是性能问题；滚动深度低但加载快，可能是首屏内容不吸引人。\n4. 针对每个问题页面，给出 1-2 条具体、可执行的优化策略，并预估方向性收益。\n5. 最后调用 query_visitor 查询高意向访客（visitor_id: visitor-zhang-wei-hvip）生成访客画像。\n\n【硬性原则】\n- 所有数字必须来自工具返回结果，禁止自己编造或估算数字。\n- 如果工具没返回某项数据，明确说\"数据不足\"，不要猜。\n- 诊断要分三层表述：①现象（数据是什么）②病因（为什么）③处方（怎么改）。\n- 语言简洁，面向产品/运营人员，不用技术黑话。\n\n【输出格式】严格输出 JSON（不要有markdown代码块，直接输出纯JSON）：\n{\n  \"summary\": \"一句话总结全站最大的转化问题\",\n  \"page_diagnoses\": [\n    {\n      \"page_url\": \"...\",\n      \"facts\": { \"real_bounce_rate\": 0.72, \"avg_load_ms\": 4300 },\n      \"diagnosis\": \"病因分析...\",\n      \"strategy\": \"优化建议...\",\n      \"expected_effect\": \"方向性预估\"\n    }\n  ],\n  \"visitor_profile\": {\n    \"visitor_id\": \"...\",\n    \"summary\": \"访客画像描述\",\n    \"intent_score\": \"高/中/低\",\n    \"recommendation\": \"跟进建议\"\n  }\n}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-llm",
+      "name": "OpenAI gpt-4o",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [100, 560],
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {}
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "BsWf9e7kqJ8FadG8",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "id": "node-tool-metrics",
+      "name": "query_page_metrics",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [300, 560],
+      "parameters": {
+        "name": "query_page_metrics",
+        "description": "返回各页面的会话数(total_sessions)、平均加载耗时(avg_load_ms)、真实跳出率(real_bounce_rate)、平均停留时长(avg_dwell_ms)、平均滚动深度(avg_scroll_percent)、移动端会话数(mobile_sessions)。无需参数，直接调用。",
+        "method": "GET",
+        "url": "http://localhost:3001/api/page-metrics",
+        "authentication": "none",
+        "sendHeaders": false,
+        "sendQuery": false,
+        "sendBody": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "node-tool-visitor",
+      "name": "query_visitor",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [500, 560],
+      "parameters": {
+        "name": "query_visitor",
+        "description": "查询单个访客的行为画像事实数据。返回访问次数(visit_count)、浏览页面数(pages_viewed)、访问的页面列表(visited_pages)、CTA点击数(cta_clicks)、定价页访问次数(pricing_visits)、最深滚动(deepest_scroll)、首次/最后访问时间。必须传入 visitor_id 参数。",
+        "method": "GET",
+        "url": "=`http://localhost:3001/api/visitor/${$fromAI('visitor_id', 'The visitor ID to query profile for', 'string')}`",
+        "authentication": "none",
+        "sendHeaders": false,
+        "sendQuery": false,
+        "sendBody": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "node-parse",
+      "name": "解析诊断结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300],
+      "parameters": {
+        "jsCode": "// 解析 Agent 输出的 JSON，拆分成多行供 Postgres 插入\nconst output = $input.first().json.output;\n\nlet result;\ntry {\n  // 去掉可能的 markdown 代码块包裹\n  const clean = output.replace(/^```json\\s*/i, '').replace(/^```\\s*/i, '').replace(/```$/i, '').trim();\n  result = JSON.parse(clean);\n} catch(e) {\n  // 如果解析失败，存储原始文本\n  return [{\n    json: {\n      tenant_id: 'demo',\n      page_url: 'ALL',\n      facts: JSON.stringify({}),\n      diagnosis: output,\n      strategy: '',\n      agent_trace: JSON.stringify({ error: 'JSON parse failed', raw: output.slice(0, 500) })\n    }\n  }];\n}\n\nconst rows = (result.page_diagnoses || []).map(d => ({\n  json: {\n    tenant_id: 'demo',\n    page_url: d.page_url,\n    facts: JSON.stringify(d.facts || {}),\n    diagnosis: d.diagnosis || '',\n    strategy: (d.strategy || '') + (d.expected_effect ? ' | 预期效果：' + d.expected_effect : ''),\n    agent_trace: JSON.stringify({\n      summary: result.summary,\n      visitor_profile: result.visitor_profile || null\n    })\n  }\n}));\n\n// 如果没有 page_diagnoses，保存 summary\nif (rows.length === 0) {\n  rows.push({\n    json: {\n      tenant_id: 'demo',\n      page_url: 'ALL',\n      facts: JSON.stringify({}),\n      diagnosis: result.summary || output,\n      strategy: '',\n      agent_trace: JSON.stringify(result)\n    }\n  });\n}\n\nreturn rows;"
+      }
+    },
+    {
+      "id": "node-pg-insert",
+      "name": "写入 diagnosis_results",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [900, 300],
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "diagnosis_results",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "tenant_id": "={{ $json.tenant_id }}",
+            "page_url": "={{ $json.page_url }}",
+            "facts": "={{ $json.facts }}",
+            "diagnosis": "={{ $json.diagnosis }}",
+            "strategy": "={{ $json.strategy }}",
+            "agent_trace": "={{ $json.agent_trace }}"
+          }
+        },
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "RlGcKTDHK5xeUllt",
+          "name": "anvil_demo Postgres"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "手动触发": {
+      "main": [
+        [{ "node": "诊断 Agent", "type": "main", "index": 0 }]
+      ]
+    },
+    "OpenAI gpt-4o": {
+      "ai_languageModel": [
+        [{ "node": "诊断 Agent", "type": "ai_languageModel", "index": 0 }]
+      ]
+    },
+    "query_page_metrics": {
+      "ai_tool": [
+        [{ "node": "诊断 Agent", "type": "ai_tool", "index": 0 }]
+      ]
+    },
+    "query_visitor": {
+      "ai_tool": [
+        [{ "node": "诊断 Agent", "type": "ai_tool", "index": 0 }]
+      ]
+    },
+    "诊断 Agent": {
+      "main": [
+        [{ "node": "解析诊断结果", "type": "main", "index": 0 }]
+      ]
+    },
+    "解析诊断结果": {
+      "main": [
+        [{ "node": "写入 diagnosis_results", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

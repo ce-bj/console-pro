@@ -1,0 +1,253 @@
+{
+  "page": "AgentObservabilityModule",
+  "route": "/platform/agent-observability",
+  "routes": [
+    {
+      "path": "/platform/agent-observability",
+      "component": "AgentObservabilityOverviewPage",
+      "purpose": "平台管理员的客户级运营聚合与统一筛选排序工作列表；不展示单 Agent 或单 Trace 详情"
+    },
+    {
+      "path": "/platform/agent-observability/tenants/:tenantId",
+      "component": "TenantObservabilityPage",
+      "purpose": "客户重点监测：共享客户指标、租户下全部 Agent、专项评分和风险 Trace 预览；不展示版本、配置或负责人"
+    },
+    {
+      "path": "/platform/agent-observability/tenants/:tenantId/agents/:agentId",
+      "component": "AgentObservabilityDetailPage",
+      "purpose": "单 Agent 的 Session 列表：会话摘要、用户、轮数、质量、Tool/子 Agent、RAG 与反馈"
+    },
+    {
+      "path": "/platform/agent-observability/tenants/:tenantId/agents/:agentId/sessions/:sessionId",
+      "component": "AgentObservabilitySessionDetailPage",
+      "purpose": "Session 详情：按轮次展示 Trace，并展开当前 Agent 的全部动态评分列"
+    },
+    {
+      "path": "/platform/agent-observability/tenants/:tenantId/agents/:agentId/sessions/:sessionId/traces/:traceId",
+      "component": "AgentObservabilityTraceDetailPage",
+      "purpose": "Trace 独立详情页：完整对话、评分理由、Generation 运行、Tool/子 Agent 和 RAG 证据"
+    },
+    {
+      "path": "/platform/agent-observability/tools",
+      "component": "ToolQualityCenterPage",
+      "purpose": "全平台跨客户的工具质量中心"
+    },
+    {
+      "path": "/platform/agent-observability/tools/:toolType",
+      "component": "ToolObservabilityDetailPage",
+      "purpose": "单类工具按客户与 Agent 下钻"
+    },
+    {
+      "path": "/platform/agent-observability/tenants/:tenantId/agents/:agentId/quality-reviews",
+      "component": "QualityReviewPage",
+      "purpose": "当前 Agent 的风险 Trace 便捷筛选，只提供人工质检、加入 FAQ、标记解决和站内 Trace 查看"
+    },
+    {
+      "path": "/platform/agent-observability/tenants/:tenantId/agents/:agentId/alerts",
+      "component": "AlertGovernancePage",
+      "purpose": "当前 Agent 或其 Tool 的告警规则配置、事件处理及问题样本联动"
+    }
+  ],
+  "dataSources": [
+    {
+      "name": "mockPlatformAgentStatsInfo",
+      "shape": "object",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/overview"
+      },
+      "queryParams": [
+        "timeRange"
+      ]
+    },
+    {
+      "name": "mockTenantListData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/tenants"
+      },
+      "queryParams": [
+        "timeRange",
+        "keyword",
+        "statuses[]",
+        "industries[]",
+        "invocationTypes[]",
+        "toolProblemOnly",
+        "sortBy",
+        "sortDir"
+      ],
+      "scope": "平台首页只允许客户聚合字段；状态和行业支持多选，Tool 异常定义为 Tool 成功率低于 95%，列表支持客户优先级与聚合字段排序"
+    },
+    {
+      "name": "mockTenantMonitoringData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/tenants/{tenantId}/monitoring"
+      },
+      "queryParams": [
+        "tenantId",
+        "timeRange",
+        "environment"
+      ],
+      "scope": "客户层开始返回智能客服PRO与运营助手的类型专项评分和版本门禁"
+    },
+    {
+      "name": "ObservabilitySession turns with Trace risk analysis",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/traces"
+      },
+      "queryParams": [
+        "tenantId",
+        "agentId",
+        "timeRange",
+        "riskLevel",
+        "reviewStatus",
+        "alertEventId",
+        "traceId"
+      ],
+      "scope": "风险样本是 ObservabilityTrace.risk 的筛选视图，不维护独立记录或 ID",
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    },
+    {
+      "name": "mockObservabilitySessions + mockAlertEventsData",
+      "shape": "arrays",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/sessions|alert-events"
+      },
+      "queryParams": [
+        "tenantId",
+        "agentId",
+        "sessionId",
+        "traceId",
+        "alertEventId"
+      ],
+      "scope": "Session→Trace 层级、agent_call 子 Agent Tool 关联及告警事件命中样本",
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    },
+    {
+      "name": "mockToolMetricsData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/tools"
+      },
+      "queryParams": [
+        "timeRange",
+        "tenantId",
+        "siteIds",
+        "agentId",
+        "toolType"
+      ]
+    },
+    {
+      "name": "mockConversationTurnsData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/conversation-turns"
+      },
+      "queryParams": [
+        "timeRange",
+        "tenantId",
+        "siteIds",
+        "agentId",
+        "status"
+      ],
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    },
+    {
+      "name": "mockKnowledgeQualityData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/rag-quality"
+      },
+      "queryParams": [
+        "timeRange",
+        "tenantId",
+        "siteIds",
+        "agentId",
+        "status"
+      ],
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleFetchPlatformAgentOverview",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/overview"
+      },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFetchTenantList",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/tenants"
+      },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleFetchTenantObservability",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/tenants/{tenantId}/monitoring"
+      },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFetchTenantRiskTraces",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/traces"
+      },
+      "requestFrom": "param",
+      "responseShape": "risk-filtered Trace array"
+    },
+    {
+      "handler": "handleUpdateRiskSampleStatus",
+      "endpoint": {
+        "method": "PATCH",
+        "path": "/api/platform/agent-observability/traces/{traceId}/risk"
+      },
+      "requestFrom": "body",
+      "responseShape": "Trace risk analysis"
+    },
+    {
+      "handler": "handleFetchAlertEvents",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/alert-events"
+      },
+      "requestFrom": "param",
+      "responseShape": "array"
+    }
+  ],
+  "dataSourceNote": "N13 固定遵循平台→客户→Agent Session→Session Trace→Trace 详情→Observation/Score 层级。风险等级、诊断、人工质检和解决状态直接挂载在 Trace 上；风险样本页只是风险 Trace 筛选。客户可见页面不展示负责人、Dataset、外部原始 Trace、版本或环境配置。 Session、Trace、Generation、Tool、Retriever 和单条 Score 明细默认保留 30 天；日聚合基础计数、样本量、分数和及可合并分布长期保留。Session 列表、Session 详情和 Trace 详情必须展示该限制。",
+  "externalServices": {
+    "langfuse": "http://172.25.171.180:3001/project/cmqt6lurb0006pf08lzsznwyx",
+    "agentBackend": "agent-backend /api/platform/agent-observability/*"
+  }
+}

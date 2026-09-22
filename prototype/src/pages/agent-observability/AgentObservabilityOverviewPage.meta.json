@@ -1,0 +1,27 @@
+{
+  "page": "AgentObservabilityOverviewPage",
+  "route": "/platform/agent-observability",
+  "layout": "platform customer aggregates + unified filterable and sortable customer operations worklist",
+  "dataSources": [
+    {
+      "name": "customer monitoring aggregates",
+      "shape": "array-derived overview object",
+      "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/overview" },
+      "queryParams": ["timeRange"],
+      "fields": ["customer count", "Agent count", "sessions", "turns", "weighted request success", "weighted satisfaction", "weighted Tool/RAG rates", "cost", "risk customers", "risk count"]
+    },
+    {
+      "name": "customer summary list",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/tenants" },
+      "queryParams": ["timeRange", "keyword", "statuses[]", "industries[]", "invocationTypes[]", "toolProblemOnly", "sortBy", "sortDir"],
+      "scope": "平台首页仅返回并聚合客户摘要；状态和行业支持多选，Tool 异常定义为 Tool 成功率低于 95%；不返回发布门禁、单 Agent、Session 或 Trace 明细"
+    }
+  ],
+  "actions": [
+    { "handler": "handleFetchPlatformAgentOverview", "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/overview" }, "requestFrom": "param", "responseShape": "customer-derived aggregate object" },
+    { "handler": "handleFetchTenantList", "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/tenants" }, "requestFrom": "param", "responseShape": "customer aggregate array" },
+    { "handler": "handleFetchTenantDetail", "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/tenants/{tenantId}" }, "requestFrom": "param", "responseShape": "customer monitoring object" }
+  ],
+  "notes": "平台首页保持客户经营视角：所有数字都由客户汇总字段按明确分母聚合而来。客户监控与优先处置合并为统一工作列表，支持关键词、状态多选、行业多选、仅 Tool 异常和可排序列。优先级按客户健康状态、Tool/RAG/质量异常和风险数量派生；平台级 P95 不由客户 P95 均值伪造，原型展示客户 P95 最大值。单 Agent 评估、发布状态、Session/Trace 证据均从客户页开始展示。"
+}

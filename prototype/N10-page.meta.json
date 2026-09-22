@@ -1,0 +1,55 @@
+{
+  "page": "ConversionDashboardPage",
+  "route": "/console/analytics",
+  "dataSources": [
+    {
+      "name": "mockNorthstarStats",
+      "shape": "object",
+      "endpoint": { "method": "GET", "path": "/api/analytics/northstar" },
+      "queryParams": ["time_range", "site"]
+    },
+    {
+      "name": "mockFunnelData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/analytics/funnel" },
+      "queryParams": ["time_range", "site"]
+    },
+    {
+      "name": "mockTrendData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/analytics/trend" },
+      "queryParams": ["metrics", "time_range", "site"]
+    },
+    {
+      "name": "mockSegmentData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/analytics/segments" },
+      "queryParams": ["dimension", "time_range", "site"]
+    },
+    {
+      "name": "mockAbTestsData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/analytics/ab-tests" },
+      "queryParams": ["status"]
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleExportReport",
+      "endpoint": { "method": "GET", "path": "/api/analytics/export" },
+      "requestFrom": "param",
+      "responseShape": "none"
+    },
+    {
+      "handler": "handleViewAbTestDetail",
+      "endpoint": { "method": "GET", "path": "/api/analytics/ab-tests/{test_id}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    }
+  ],
+  "dataSourceNote": "LCR = valid_leads / total_sessions（SQL 计算，非模型）。σ = √(p(1-p)/n) 显著性检验在后端计算后写入 ab_tests 表，前端展示结果。",
+  "externalServices": {
+    "backend": "BACKEND_URL — 聚合 raw_events + sessions + leads + tickets + csat 计算漏斗与北极星",
+    "n8n": "n8n 诊断 Agent（复用 sale-demo workflow）可作为转化诊断补充工具"
+  }
+}

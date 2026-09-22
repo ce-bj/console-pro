@@ -1,0 +1,23 @@
+{
+  "page": "QualityReviewPage",
+  "route": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/quality-reviews",
+  "layout": "Filter view over risky Traces with manual review, FAQ prefill and resolution actions",
+  "dataSources": [
+    {
+      "name": "ObservabilitySession turns with Trace risk analysis",
+      "shape": "derived array",
+      "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/traces" },
+      "queryParams": ["tenantId", "agentId", "timeRange", "riskLevel", "sourceSignal", "reviewStatus", "alertEventId", "alertRuleId", "traceId", "keyword"],
+      "fields": ["Session ID", "Trace", "risk analysis", "feedback", "scores", "Tool/RAG evidence", "manual review", "resolution status"]
+    }
+  ],
+  "actions": [
+    { "handler": "handleSubmitQualityReview", "endpoint": { "method": "POST", "path": "/api/platform/agent-observability/quality-reviews" }, "requestFrom": "body", "responseShape": "Trace risk review" },
+    { "handler": "handleUpdateRiskSampleStatus", "endpoint": { "method": "PATCH", "path": "/api/platform/agent-observability/traces/{traceId}/risk" }, "requestFrom": "body", "responseShape": "Trace risk analysis" },
+    { "handler": "handleCreateFaqEntry", "endpoint": { "method": "POST", "path": "/api/knowledge-config/catalog/faq" }, "requestFrom": "body", "responseShape": "FAQ entry" },
+    { "handler": "viewTrace", "endpoint": { "method": "CLIENT_NAVIGATION", "path": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/sessions/{sessionId}/traces/{traceId}" }, "requestFrom": "path", "responseShape": "page" },
+    { "handler": "handleUploadKnowledgeDocument", "endpoint": { "method": "POST", "path": "/api/knowledge-config/assets/upload" }, "requestFrom": "body", "responseShape": "knowledge gap resolution" },
+    { "handler": "handleRecheckKnowledgeGap", "endpoint": { "method": "POST", "path": "/api/platform/agent-observability/traces/{traceId}/recheck-knowledge-gap" }, "requestFrom": "path", "responseShape": "knowledge gap resolution" }
+  ],
+  "notes": "Risk samples are not separate records. The page filters ObservabilityTrace entries with risk analysis. Customer-facing actions are limited to manual review and marking resolved; there is no owner, Dataset or external raw-Trace action. Risks with rootCause=knowledge_base show a single '加入知识库' entry point that opens a unified dialog: the user picks either creating a FAQ entry or uploading a document, and both paths must go through the same recheck step before the knowledge gap can be marked resolved — there is no unverified shortcut."
+}

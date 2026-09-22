@@ -1,0 +1,26 @@
+[
+  {
+    "id": "rag-pricing-001",
+    "category": "rag_qa",
+    "input": "Anvil 企业版多少钱？不同版本有什么区别？",
+    "expected_behavior": "调用知识库，基于 pricing 文档回答价格或说明需联系销售，不编造未提供价格。",
+    "expected_tools": ["rag_search"],
+    "expected_keywords": ["价格", "版本"]
+  },
+  {
+    "id": "rag-feature-001",
+    "category": "rag_qa",
+    "input": "你们支持线索自动分配和人工客服接管吗？",
+    "expected_behavior": "调用知识库，说明线索/人工接管相关能力。",
+    "expected_tools": ["rag_search"],
+    "expected_keywords": ["线索", "人工"]
+  },
+  {
+    "id": "sales-intent-001",
+    "category": "sales_agent",
+    "input": "我们公司 50 人销售团队想预约 demo，也想了解私有化部署。",
+    "expected_behavior": "识别较高购买意向，回答问题后自然推进留资或预约。",
+    "expected_tools": ["rag_search", "analyze_visitor_intent"],
+    "expected_keywords": ["demo", "部署"]
+  }
+]

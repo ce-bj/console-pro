@@ -1,0 +1,58 @@
+{
+  "page": "AgentObservabilityTraceDetailPage",
+  "route": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/sessions/{sessionId}/traces/{traceId}",
+  "layout": "Full-page Trace identity, conversation, scores, generation runtime, Tool and child Agent evidence, RAG evidence and Session timeline",
+  "dataSources": [
+    {
+      "name": "selected Trace evidence",
+      "shape": "object",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/sessions/{sessionId}/traces/{traceId}"
+      },
+      "queryParams": [
+        "tenantId",
+        "agentId",
+        "sessionId",
+        "traceId"
+      ],
+      "fields": [
+        "Session context",
+        "Trace identifiers",
+        "full conversation",
+        "risk analysis and manual review",
+        "scores and reasons",
+        "generation runtime",
+        "Tool observations",
+        "child Agent linkage",
+        "RAG evidence",
+        "Session timeline"
+      ],
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "reviewRiskTrace",
+      "endpoint": {
+        "method": "CLIENT_NAVIGATION",
+        "path": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/quality-reviews?traceId={traceId}"
+      },
+      "requestFrom": "path",
+      "responseShape": "page"
+    },
+    {
+      "handler": "viewChildAgentTrace",
+      "endpoint": {
+        "method": "CLIENT_NAVIGATION",
+        "path": "/platform/agent-observability/tenants/{tenantId}/agents/{targetAgentId}/sessions/{childSessionId}/traces/{childTraceId}"
+      },
+      "requestFrom": "path",
+      "responseShape": "page"
+    }
+  ],
+  "notes": "Risk analysis and manual review belong to the Trace and appear before execution evidence. Score names are displayed in Chinese first with English/code references, and only scores actually produced for this Trace are listed. Customer-facing Trace detail has no Dataset or external raw-Trace action. Session、Trace 及 Observation 详细证据默认仅保留最近 30 天；页面持续显示保留期提示。到期删除明细后，每日聚合指标与历史趋势继续保留。"
+}

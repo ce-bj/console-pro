@@ -1,0 +1,24 @@
+{
+  "page": "IndustryKnowledgePlatformPage",
+  "route": "/platform/industry-knowledge",
+  "dataSources": [
+    { "name": "mockPlatformIndustryKnowledgeData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge" }, "queryParams": ["keyword", "primaryIndustry", "secondaryIndustry", "primaryCategory", "secondaryCategory", "contentFormat", "validityStatus", "timeliness", "audience", "language", "tag", "status", "page", "pageSize"] },
+    { "name": "mockIndustryKnowledgeVersionsData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge/versions" } },
+    { "name": "mockTenantPushTargetsData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge/push-targets" } }
+  ],
+  "actions": [
+    { "handler": "handleFetchPlatformIndustryKnowledge", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge" }, "requestFrom": "param", "responseShape": "array" },
+    { "handler": "handleCreatePlatformIndustryKnowledge", "endpoint": { "method": "POST", "path": "/api/platform/industry-knowledge" }, "requestFrom": "form", "responseShape": "object" },
+    { "handler": "handleUpdatePlatformIndustryKnowledge", "endpoint": { "method": "PUT", "path": "/api/platform/industry-knowledge/{id}" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handlePublishIndustryKnowledgeVersion", "endpoint": { "method": "POST", "path": "/api/platform/industry-knowledge/{id}/versions" }, "requestFrom": "form", "responseShape": "object" },
+    { "handler": "handlePushIndustryKnowledge", "endpoint": { "method": "POST", "path": "/api/platform/industry-knowledge/{id}/push" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleArchivePlatformIndustryKnowledge", "endpoint": { "method": "PATCH", "path": "/api/platform/industry-knowledge/{id}/archive" }, "requestFrom": "param", "responseShape": "object" },
+    { "handler": "handleTogglePlatformIndustryKnowledge", "endpoint": { "method": "PATCH", "path": "/api/platform/industry-knowledge/{id}/enabled" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleBatchPlatformIndustryKnowledgeStatus", "endpoint": { "method": "PATCH", "path": "/api/platform/industry-knowledge/batch/status" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleBatchTogglePlatformIndustryKnowledge", "endpoint": { "method": "PATCH", "path": "/api/platform/industry-knowledge/batch/enabled" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleBatchRelearnPlatformIndustryKnowledge", "endpoint": { "method": "POST", "path": "/api/platform/industry-knowledge/batch/relearn" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleBatchPushPlatformIndustryKnowledge", "endpoint": { "method": "POST", "path": "/api/platform/industry-knowledge/batch/push" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleBatchUpdatePlatformIndustryKnowledgeMetadata", "endpoint": { "method": "PATCH", "path": "/api/platform/industry-knowledge/batch/metadata" }, "requestFrom": "body", "responseShape": "object" },
+    { "handler": "handleBatchDeletePlatformIndustryKnowledge", "endpoint": { "method": "DELETE", "path": "/api/platform/industry-knowledge/batch" }, "requestFrom": "body", "responseShape": "object" }
+  ]
+}

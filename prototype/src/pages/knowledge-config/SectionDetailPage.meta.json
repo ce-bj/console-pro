@@ -1,0 +1,25 @@
+{
+  "page": "SectionDetailPage",
+  "route": "/knowledge-config/sections/:sectionKey",
+  "dataSources": [
+    {
+      "name": "mockSectionChunkRuleDefaultsData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/kb/sections/chunk-rule-defaults"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleFetchSectionChunkRuleDefaults",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/kb/sections/chunk-rule-defaults"
+      },
+      "requestFrom": "none",
+      "responseShape": "array"
+    }
+  ]
+}

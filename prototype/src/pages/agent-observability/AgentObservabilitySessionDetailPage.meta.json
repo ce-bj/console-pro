@@ -1,0 +1,53 @@
+{
+  "page": "AgentObservabilitySessionDetailPage",
+  "route": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/sessions/{sessionId}",
+  "layout": "Session summary plus one row per ordered Trace with aggregate score only",
+  "dataSources": [
+    {
+      "name": "selected ObservabilitySession",
+      "shape": "object",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/platform/agent-observability/sessions/{sessionId}"
+      },
+      "queryParams": [
+        "tenantId",
+        "agentId",
+        "sessionId",
+        "status",
+        "qualityRange",
+        "toolType",
+        "ragStatus",
+        "feedback",
+        "keyword"
+      ],
+      "fields": [
+        "session summary",
+        "userId",
+        "duration",
+        "trace count",
+        "quality",
+        "Tool and child Agent",
+        "RAG",
+        "feedback",
+        "ordered Traces"
+      ],
+      "retention": {
+        "rawDetailDays": 30,
+        "dailyAggregates": "long_term"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "viewTrace",
+      "endpoint": {
+        "method": "CLIENT_NAVIGATION",
+        "path": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/sessions/{sessionId}/traces/{traceId}"
+      },
+      "requestFrom": "path",
+      "responseShape": "page"
+    }
+  ],
+  "notes": "Trace-level status, aggregate-quality range, Tool, RAG status, feedback and keyword filters live on this page because they correspond directly to visible Trace columns. Each row shows only an aggregate score; actual per-metric scores are shown in Trace detail. Session、Trace 及 Observation 详细证据默认仅保留最近 30 天；页面持续显示保留期提示。到期删除明细后，每日聚合指标与历史趋势继续保留。"
+}

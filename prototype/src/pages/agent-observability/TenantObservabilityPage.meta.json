@@ -1,0 +1,28 @@
+{
+  "page": "TenantObservabilityPage",
+  "route": "/platform/agent-observability/tenants/{tenantId}",
+  "layout": "customer summary + all Agent cards + cross-Agent comparison + risky Trace preview",
+  "dataSources": [
+    {
+      "name": "mockTenantMonitoringData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/tenants/{tenantId}/monitoring" },
+      "queryParams": ["tenantId", "timeRange", "environment"],
+      "fields": ["all tenant Agents", "shared runtime metrics", "type-specific scorecards", "Tool/RAG summary"]
+    },
+    {
+      "name": "ObservabilitySession turns with Trace risk analysis",
+      "shape": "derived array",
+      "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/traces" },
+      "queryParams": ["tenantId", "timeRange", "agentId", "riskLevel", "reviewStatus"],
+      "fields": ["traceId", "sessionId", "risk analysis", "sourceSignals", "matched alert events", "reviewStatus"]
+    }
+  ],
+  "actions": [
+    { "handler": "handleFetchTenantObservability", "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/tenants/{tenantId}/monitoring" }, "requestFrom": "param", "responseShape": "object" },
+    { "handler": "handleFetchTenantRiskTraces", "endpoint": { "method": "GET", "path": "/api/platform/agent-observability/traces" }, "requestFrom": "param", "responseShape": "risk-filtered Trace array" },
+    { "handler": "viewRiskTrace", "endpoint": { "method": "CLIENT_NAVIGATION", "path": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/sessions/{sessionId}/traces/{traceId}" }, "requestFrom": "path", "responseShape": "page" },
+    { "handler": "reviewRiskTrace", "endpoint": { "method": "CLIENT_NAVIGATION", "path": "/platform/agent-observability/tenants/{tenantId}/agents/{agentId}/quality-reviews?traceId={traceId}" }, "requestFrom": "path", "responseShape": "page" }
+  ],
+  "notes": "The tenant risk table is a preview of risky Traces, not a second risk-sample entity. It does not display owners or expose Dataset/external raw-Trace actions. Agent cards preserve operational and quality metrics while hiding versions and configuration."
+}

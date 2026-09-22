@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Chat Test — 直连 agent-backend</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, sans-serif; font-size: 13px; background: #f5f6fa; display: flex; flex-direction: column; height: 100vh; }
+  .header { background: #1e293b; color: #fff; padding: 10px 16px; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 14px; font-weight: 600; }
+  .badge { font-size: 10px; background: #475569; padding: 2px 6px; border-radius: 8px; }
+  .sid-badge { font-size: 10px; background: #6366f1; padding: 2px 8px; border-radius: 8px; }
+
+  .messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { display: flex; gap: 8px; align-items: flex-start; }
+  .msg.user { flex-direction: row-reverse; }
+  .av { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+  .av.bot { background: #6366f1; }
+  .av.user { background: #e5e7eb; }
+  .bubble { max-width: 65%; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+  .bubble.bot { background: #fff; border: 1px solid #e5e7eb; }
+  .bubble.user { background: #6366f1; color: #fff; }
+  .bubble.system { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; font-size: 12px; }
+
+  /* Tool call indicator */
+  .tool-indicator { font-size: 11px; color: #6b7280; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 8px; align-self: center; }
+
+  /* Form */
+  .inline-form { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px; margin-top: 6px; }
+  .inline-form h4 { font-size: 12px; margin-bottom: 10px; color: #374151; }
+  .inline-form input, .inline-form textarea { width: 100%; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 8px; font-size: 12px; margin-bottom: 6px; font-family: inherit; }
+  .inline-form input:focus, .inline-form textarea:focus { outline: none; border-color: #6366f1; }
+  .inline-form button { width: 100%; background: #6366f1; color: #fff; border: none; border-radius: 6px; padding: 7px; font-size: 12px; cursor: pointer; }
+  .inline-form button:hover { background: #4f46e5; }
+
+  /* Input area */
+  .input-area { padding: 12px 16px; background: #fff; border-top: 1px solid #e5e7eb; display: flex; gap: 8px; }
+  .input-area textarea { flex: 1; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px 12px; font-size: 13px; resize: none; height: 52px; font-family: inherit; line-height: 1.5; }
+  .input-area textarea:focus { outline: none; border-color: #6366f1; }
+  .input-area button { padding: 0 18px; background: #6366f1; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 500; }
+  .input-area button:hover { background: #4f46e5; }
+  .input-area button:disabled { background: #c7d2fe; cursor: not-allowed; }
+
+  .handoff-notice { text-align: center; font-size: 12px; color: #92400e; background: #fef3c7; border: 1px solid #fde68a; border-radius: 8px; padding: 8px 16px; margin: 4px 0; }
+  .cursor { display: inline-block; animation: blink .8s step-end infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .init-row { display: flex; gap: 8px; padding: 10px 16px; background: #fff; border-top: 1px solid #e5e7eb; align-items: center; font-size: 12px; }
+  .init-row input { border: 1px solid #e5e7eb; border-radius: 6px; padding: 5px 8px; font-size: 12px; width: 140px; }
+  .init-row button { padding: 5px 12px; border-radius: 6px; border: none; background: #10b981; color: #fff; cursor: pointer; font-size: 12px; }
+  .init-row button:hover { background: #059669; }
+  .init-row .label { color: #6b7280; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>💬 Chat Test · agent-backend</h1>
+  <span class="badge">:8001</span>
+  <span id="sidLabel" style="display:none" class="sid-badge">…</span>
+  <span id="humanBadge" style="display:none;margin-left:auto;background:#f59e0b;padding:2px 8px;border-radius:8px;font-size:11px">人工接管中</span>
+</div>
+
+<div class="init-row" id="initRow">
+  <span class="label">用户类型：</span>
+  <select id="userType" style="border:1px solid #e5e7eb;border-radius:6px;padding:4px 6px;font-size:12px">
+    <option value="anonymous">匿名访客</option>
+    <option value="lead">已留资线索</option>
+    <option value="member">登录会员</option>
+  </select>
+  <button onclick="startSession()">开始会话</button>
+  <span class="label" style="margin-left:8px">已有 session_id：</span>
+  <input id="existingSid" placeholder="留空则新建" />
+  <span class="label" style="color:#9ca3af;font-size:11px">· operator-test.html 中可查看分析结果和接管操作</span>
+</div>
+
+<div class="messages" id="messages">
+  <div style="text-align:center;color:#9ca3af;padding:30px;font-size:13px">
+    点击「开始会话」创建对话，或在右侧 operator-test.html 中管理会话
+  </div>
+</div>
+
+<div class="input-area">
+  <textarea id="msgInput" placeholder="输入消息，Enter 发送…" disabled
+    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"></textarea>
+  <button id="sendBtn" onclick="sendMsg()" disabled>发送</button>
+</div>
+
+<script>
+const BASE = 'http://localhost:8001';
+let sessionId = null;
+let isStreaming = false;
+let pollTimer = null;
+let humanServing = false;
+let lastMsgIdx = -1;
+
+async function startSession() {
+  const existing = document.getElementById('existingSid').value.trim();
+  if (existing) {
+    sessionId = existing;
+  } else {
+    const userType = document.getElementById('userType').value;
+    const visitorId = localStorage.getItem('pt_visitor_id') || ('v-' + Math.random().toString(36).slice(2,8));
+    try {
+      const r = await fetch(`${BASE}/api/sessions`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ visitor_id: visitorId, user_type: userType }),
+      });
+      const d = await r.json();
+      sessionId = d.session_id;
+    } catch (e) {
+      addSystemMsg(`连接 agent-backend 失败: ${e.message}`);
+      return;
+    }
+  }
+
+  document.getElementById('initRow').style.display = 'none';
+  document.getElementById('sidLabel').textContent = `sid: ${sessionId}`;
+  document.getElementById('sidLabel').style.display = '';
+  document.getElementById('msgInput').disabled = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('msgInput').focus();
+  document.getElementById('messages').innerHTML = '';
+
+  addSystemMsg(`会话已建立 · session_id: ${sessionId}`);
+  addBotMsg('你好！👋 我是 Anvil 智能助手。请问有什么可以帮您？');
+
+  // Poll for operator messages when human_serving
+  pollTimer = setInterval(pollOperatorMessages, 1500);
+}
+
+async function pollOperatorMessages() {
+  if (!sessionId || !humanServing) return;
+  try {
+    const r = await fetch(`${BASE}/api/sessions/${sessionId}/messages?after=${lastMsgIdx}`);
+    const d = await r.json();
+    if (d.messages && d.messages.length) {
+      for (const m of d.messages) {
+        if (m.role === 'operator') addOperatorMsg(m.content);
+        if (m.idx > lastMsgIdx) lastMsgIdx = m.idx;
+      }
+    }
+    if (!d.human_serving && humanServing) {
+      humanServing = false;
+      document.getElementById('humanBadge').style.display = 'none';
+      addSystemMsg('AI 客服已恢复接管对话');
+    }
+  } catch {}
+}
+
+async function sendMsg() {
+  const ta = document.getElementById('msgInput');
+  const text = ta.value.trim();
+  if (!text || isStreaming || !sessionId) return;
+  ta.value = '';
+
+  addUserMsg(text);
+
+  if (humanServing) {
+    // Store message for polling (operator will reply)
+    try {
+      await fetch(`${BASE}/api/chat/${sessionId}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ message: text }),
+      });
+    } catch {}
+    return;
+  }
+
+  // AI mode: SSE stream
+  isStreaming = true;
+  document.getElementById('sendBtn').disabled = true;
+
+  const typingEl = addTyping();
+  let bubble = null;
+  let fullText = '';
+
+  try {
+    const resp = await fetch(`${BASE}/api/chat/${sessionId}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: text }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        const raw = line.slice(5).trim();
+        try {
+          const evt = JSON.parse(raw);
+          handleEvent(evt, typingEl, { fullText, bubble, setFullText: t => fullText = t, setBubble: b => bubble = b });
+        } catch {}
+      }
+    }
+  } catch (e) {
+    typingEl?.remove();
+    addSystemMsg(`请求失败: ${e.message}`);
+  }
+
+  isStreaming = false;
+  document.getElementById('sendBtn').disabled = false;
+  if (bubble) {
+    const cursor = bubble.querySelector('.cursor');
+    if (cursor) cursor.remove();
+  }
+}
+
+function handleEvent(evt, typingEl, state) {
+  if (evt.type === 'text_delta') {
+    typingEl?.remove();
+    if (!state.bubble) {
+      state.setBubble(addBotBubble());
+    }
+    state.setFullText(state.fullText + evt.delta);
+    state.bubble.innerHTML = esc(state.fullText) + '<span class="cursor">▌</span>';
+    document.getElementById('messages').scrollTop = 9999;
+  }
+  else if (evt.type === 'tool_start') {
+    addToolIndicator(`🔧 调用工具: ${evt.tool}`);
+  }
+  else if (evt.type === 'form_show') {
+    typingEl?.remove();
+    showInlineForm(evt.data);
+  }
+  else if (evt.type === 'confirm_show') {
+    typingEl?.remove();
+    showConfirmDialog(evt.data);
+  }
+  else if (evt.type === 'handoff') {
+    typingEl?.remove();
+    humanServing = true;
+    document.getElementById('humanBadge').style.display = '';
+    addSystemMsg('🔔 已转人工客服 — 请在 operator-test.html 中接管此会话');
+    addSystemMsg(`原因: ${evt.data?.reason || '—'}`);
+  }
+  else if (evt.type === 'lead_captured') {
+    addSystemMsg(`✅ 线索已记录: ${JSON.stringify(evt.data)}`);
+  }
+  else if (evt.type === 'error') {
+    typingEl?.remove();
+    addSystemMsg(`❌ 错误: ${evt.message}`);
+  }
+}
+
+// ── Inline form ───────────────────────────────────────────────────────────
+function showInlineForm(spec) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  const fields = (spec.fields || []).map(f => {
+    if (f.type === 'textarea') {
+      return `<textarea id="ff-${f.id}" placeholder="${esc(f.label)}${f.required ? ' *' : ''}">${esc(f.value||'')}</textarea>`;
+    }
+    return `<input id="ff-${f.id}" type="${f.type||'text'}" placeholder="${esc(f.label)}${f.required ? ' *' : ''}" value="${esc(f.value||'')}">`;
+  }).join('');
+  el.innerHTML = `<div class="av bot">🤖</div><div class="bubble bot">
+    <div class="inline-form">
+      <h4>${esc(spec.intro || '请填写联系信息：')}</h4>
+      ${fields}
+      <button onclick="submitForm(this, ${JSON.stringify(spec.fields||[]).replace(/"/g,'&quot;')})">
+        ${esc(spec.submit_label || '提交')}
+      </button>
+    </div>
+  </div>`;
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+}
+
+async function submitForm(btn, fields) {
+  const data = {};
+  for (const f of fields) {
+    const el = document.getElementById('ff-' + f.id);
+    if (el) data[f.id] = el.value.trim();
+  }
+  btn.disabled = true;
+  btn.textContent = '提交中…';
+  try {
+    const r = await fetch(`${BASE}/api/chat/${sessionId}`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ message: '__FORM_DATA__:' + JSON.stringify(data) }),
+    });
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await r.body.getReader().read().catch(()=>({done:true}));
+      if (done) break;
+      // simplified - just acknowledge
+    }
+    btn.closest('.inline-form').innerHTML = '<p style="color:#10b981;font-size:12px">✅ 提交成功！顾问会尽快联系您。</p>';
+  } catch {}
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────
+function addBotMsg(text) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = `<div class="av bot">🤖</div><div class="bubble bot">${esc(text)}</div>`;
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+}
+
+function addBotBubble() {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble bot';
+  el.innerHTML = '<div class="av bot">🤖</div>';
+  el.appendChild(bubble);
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+  return bubble;
+}
+
+function addUserMsg(text) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `<div class="av user">👤</div><div class="bubble user">${esc(text)}</div>`;
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+}
+
+function addOperatorMsg(text) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.innerHTML = `<div class="av bot" style="background:#f59e0b">🎧</div><div class="bubble bot">${esc(text)}</div>`;
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+}
+
+function addSystemMsg(text) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.innerHTML = `<div class="bubble system" style="max-width:90%;align-self:center">${esc(text)}</div>`;
+  el.style.display = 'flex'; el.style.justifyContent = 'center';
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+}
+
+function addTyping() {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'msg';
+  el.id = 'typing-indicator';
+  el.innerHTML = '<div class="av bot">🤖</div><div class="bubble bot" style="color:#9ca3af">…</div>';
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+  return el;
+}
+
+function addToolIndicator(text) {
+  const msgs = document.getElementById('messages');
+  const el = document.createElement('div');
+  el.className = 'tool-indicator';
+  el.textContent = text;
+  msgs.appendChild(el);
+  msgs.scrollTop = 9999;
+}
+
+function showConfirmDialog(spec) {
+  // Simplified: just show as system message with options
+  addSystemMsg(`[确认] ${spec.question || ''} (实现省略，见完整 widget)`);
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

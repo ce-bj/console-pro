@@ -1,0 +1,34 @@
+{
+  "page": "MetadataPage",
+  "route": "/knowledge-config/metadata",
+  "dataSources": [
+    {
+      "name": "mockPlatformEnumGroupsData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/kb/metadata/platform-enums"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleChangePortalScope",
+      "endpoint": {
+        "method": "PATCH",
+        "path": "/api/kb/metadata/portal-scope"
+      },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleUpdatePlatformEnum",
+      "endpoint": {
+        "method": "PUT",
+        "path": "/api/kb/metadata/platform-enums/{field}"
+      },
+      "requestFrom": "body",
+      "responseShape": "object"
+    }
+  ]
+}

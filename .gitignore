@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Env / secrets
+.env
+*.local
+
+# Runtime artifacts
+logs/
+*.log
+/tmp/
+*.inspect.ndjson
+
+# Local archive / delivery packages
+*.zip
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Vite build output
+prototype/dist/
+
+# Claude internal
+.claude/
+
+# 本地依赖源码与历史记录（不入库）
+agentscope/
+history/

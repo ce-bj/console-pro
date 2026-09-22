@@ -1,0 +1,97 @@
+import { useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { tracePathWithReturn } from './routes';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  AGENT_STATUS_CONFIG, RISK_CONFIG, RISK_REVIEW_STATUS_CONFIG, RISK_SOURCE_CONFIG,
+  getRiskTraceRows, mockTenantListData, mockTenantMonitoringData,
+} from './data';
+import {
+  handleFetchAgentDetail, handleFetchTenantObservability, handleFetchTenantRiskTraces,
+} from './actions';
+import {
+  EvaluationScoreGroups, MonitoringEmptyState, metricTone, percentText, scoreText,
+} from './shared';
+import type { AgentMonitoringRecord, Environment, TimeRange } from './types';
+
+function compactNumber(value: number) {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+  return value.toLocaleString();
+}
+
+function AgentBusinessOutcomes({ agent }: { agent: AgentMonitoringRecord }) {
+  if (agent.scorecard.kind === 'customer_service') {
+    const values = [
+      ['问题解决率', percentText(agent.scorecard.resolutionRate)],
+      ['转人工率', percentText(agent.scorecard.handoffRate)],
+      ['留资触发 / 完成', `${percentText(agent.scorecard.leadTriggerRate)} / ${percentText(agent.scorecard.leadCompletionRate)}`],
+    ];
+    return <div className="grid grid-cols-3 gap-2">{values.map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 p-3"><div className="text-[11px] text-slate-400">{label}</div><div className="mt-1 text-sm font-semibold text-slate-800">{value}</div></div>)}</div>;
+  }
+
+  const values = [
+    ['首稿采用率', percentText(agent.scorecard.firstDraftAdoptionRate)],
+    ['平均修改次数', `${agent.scorecard.averageRevisionCount.toFixed(1)} 次`],
+    ['人工修改幅度', percentText(agent.scorecard.humanEditMagnitude)],
+    ['发布 / 转化结果', percentText(agent.scorecard.publishOrConversionRate)],
+  ];
+  return <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">{values.map(([label, value]) => <div key={label} className="rounded-lg border border-slate-200 p-3"><div className="text-[11px] text-slate-400">{label}</div><div className="mt-1 text-sm font-semibold text-slate-800">{value}</div></div>)}</div>;
+}
+
+function AgentMonitorCard({ agent, onOpen }: { agent: AgentMonitoringRecord; onOpen: () => void }) {
+  return (
+    <Card className={`overflow-hidden ${agent.status === 'warning' ? 'border-amber-300' : 'border-slate-200'}`}>
+      <CardHeader className="border-b border-slate-100 bg-white pb-4"><div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><CardTitle className="text-lg">{agent.agentName}</CardTitle><Badge className={AGENT_STATUS_CONFIG[agent.status].cls}>{AGENT_STATUS_CONFIG[agent.status].label}</Badge><Badge className="border-slate-200 bg-slate-50 text-slate-600">{agent.agentTypeLabel}</Badge></div></div><Button size="sm" variant="outline" onClick={onOpen}>进入智能体诊断</Button></div></CardHeader>
+      <CardContent className="space-y-5 pt-5">
+        <section><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">运行表现</div><div className="grid grid-cols-2 gap-2 lg:grid-cols-4"><div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-400">会话 / 轮次</div><div className="mt-1 text-base font-semibold">{agent.metrics.sessionCount.toLocaleString()} <span className="text-xs font-normal text-slate-400">/ {agent.metrics.turnCount.toLocaleString()}</span></div></div><div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-400">请求成功率</div><div className={`mt-1 text-base font-semibold ${metricTone(agent.metrics.requestSuccessRate, 98)}`}>{percentText(agent.metrics.requestSuccessRate)}</div></div><div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-400">P95 / 首字</div><div className="mt-1 text-base font-semibold">{(agent.metrics.p95ResponseMs / 1000).toFixed(1)}s <span className="text-xs font-normal text-slate-400">/ {agent.metrics.firstResponseMs}ms</span></div></div><div className="rounded-lg bg-slate-50 p-3"><div className="text-[11px] text-slate-400">Token / 成本</div><div className="mt-1 text-base font-semibold">{compactNumber(agent.metrics.inputTokens + agent.metrics.outputTokens)} <span className="text-xs font-normal text-slate-400">/ ¥{agent.metrics.totalCost}</span></div></div></div></section>
+        <section><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">质量评价体系</div><div className="mt-1 text-[11px] text-slate-400">通用质量 + {agent.scorecard.kind === 'customer_service' ? '客服专属服务质量' : '运营专属内容质量'} · 已评 {agent.metrics.evaluatedTraceCount} 条 · 覆盖 {percentText(agent.metrics.evaluationCoverageRate)}</div></div></div><EvaluationScoreGroups agent={agent} compact /></section>
+        <section><div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">{agent.scorecard.kind === 'customer_service' ? '客户服务结果' : '内容运营结果'}</div><AgentBusinessOutcomes agent={agent} /></section>
+        <section className="grid grid-cols-2 gap-3"><div className="rounded-lg border border-slate-200 p-3"><div className="text-xs font-medium text-slate-700">Tool 执行</div><div className="mt-2 grid grid-cols-2 gap-2 text-xs"><div><span className="block text-slate-400">调用</span><strong className="mt-1 block text-slate-800">{agent.metrics.toolCallCount.toLocaleString()}</strong></div><div><span className="block text-slate-400">成功率</span><strong className={`mt-1 block ${metricTone(agent.metrics.toolSuccessRate, 97)}`}>{percentText(agent.metrics.toolSuccessRate)}</strong></div></div></div><div className="rounded-lg border border-slate-200 p-3"><div className="text-xs font-medium text-slate-700">RAG 与证据</div><div className="mt-2 grid grid-cols-3 gap-2 text-xs"><div><span className="block text-slate-400">调用率</span><strong className="mt-1 block text-slate-800">{agent.metrics.ragCallRate === null ? '—' : percentText(agent.metrics.ragCallRate)}</strong></div><div><span className="block text-slate-400">命中率</span><strong className="mt-1 block text-slate-800">{agent.metrics.ragHitRate === null ? '—' : percentText(agent.metrics.ragHitRate)}</strong></div><div><span className="block text-slate-400">忠实度</span><strong className="mt-1 block text-slate-800">{agent.metrics.groundednessScore === null ? '—' : scoreText(agent.metrics.groundednessScore)}</strong></div></div></div></section>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function TenantObservabilityPage() {
+  const { tenantId = '' } = useParams<{ tenantId: string }>();
+  const navigate = useNavigate();
+  const [timeRange, setTimeRange] = useState<TimeRange>('7d');
+  const [environment, setEnvironment] = useState<Environment>('production');
+  const [activeAgentId, setActiveAgentId] = useState<string>('all');
+  const tenantAggregate = mockTenantListData.find((item) => item.tenantId === tenantId);
+  const tenant = mockTenantMonitoringData.find((item) => item.tenantId === tenantId);
+  const agents = tenant?.agents.filter((agent) => agent.environment === environment) ?? [];
+  const risks = getRiskTraceRows().filter((item) => item.tenantId === tenantId && (activeAgentId === 'all' || item.agentId === activeAgentId));
+
+  const summary = useMemo(() => {
+    if (agents.length === 0) return tenantAggregate ? { sessions: tenantAggregate.sessionCount, turns: tenantAggregate.turnCount, successRate: 100 - tenantAggregate.errorRate, p95ResponseMs: tenantAggregate.p95ResponseDurationSec * 1000, satisfactionRate: tenantAggregate.satisfactionRate, totalCost: tenantAggregate.modelCost, riskTraceCount: tenantAggregate.riskCount, blockedCount: 0 } : null;
+    const totalTurns = agents.reduce((total, agent) => total + agent.metrics.turnCount, 0);
+    return { sessions: agents.reduce((total, agent) => total + agent.metrics.sessionCount, 0), turns: totalTurns, successRate: agents.reduce((total, agent) => total + agent.metrics.requestSuccessRate * agent.metrics.turnCount, 0) / totalTurns, p95ResponseMs: Math.max(...agents.map((agent) => agent.metrics.p95ResponseMs)), satisfactionRate: agents.reduce((total, agent) => total + agent.metrics.satisfactionRate * agent.metrics.turnCount, 0) / totalTurns, totalCost: agents.reduce((total, agent) => total + agent.metrics.totalCost, 0), riskTraceCount: agents.reduce((total, agent) => total + agent.metrics.riskTraceCount, 0), blockedCount: agents.filter((agent) => agent.releaseGate.status === 'blocked').length };
+  }, [agents, tenantAggregate]);
+
+  function refreshScope(nextTimeRange: TimeRange = timeRange, nextEnvironment: Environment = environment) {
+    handleFetchTenantObservability({ tenantId, timeRange: nextTimeRange, environment: nextEnvironment });
+    handleFetchTenantRiskTraces({ tenantId, timeRange: nextTimeRange, agentId: activeAgentId === 'all' ? undefined : activeAgentId });
+  }
+
+  if (!tenantAggregate || !tenant || !summary) return <div className="min-h-full bg-slate-50 p-6"><Card><CardContent className="py-10 text-center text-sm text-slate-600">未找到客户监控范围：{tenantId || '—'}</CardContent></Card></div>;
+  const warningAgent = agents.find((agent) => agent.status !== 'healthy');
+
+  return <div className="min-h-full bg-slate-50 p-6"><div className="mx-auto max-w-[1500px] space-y-5">
+    <header className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><Button size="sm" variant="outline" onClick={() => navigate('/platform/agent-observability')}>← 客户总览</Button><h1 className="text-xl font-semibold tracking-tight text-slate-950">{tenant.companyName} · 智能体监控</h1><Badge className="border-slate-900 bg-slate-900 text-white">{tenant.plan}</Badge><Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">监测正常</Badge></div><p className="mt-2 text-sm text-slate-500">先从客户范围判断运行与质量风险，再进入具体智能体、Session、Trace 和评估证据。</p><div className="mt-2 text-xs text-slate-400">{tenant.industry} · {tenant.customerOwner} · 接入于 {tenant.monitoredSince}</div></div><div className="flex items-center gap-2"><Select value={environment} onValueChange={(value) => { const next = value as Environment; setEnvironment(next); refreshScope(timeRange, next); }}><SelectTrigger className="h-9 w-28 bg-white text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="production">生产环境</SelectItem><SelectItem value="staging">预发环境</SelectItem></SelectContent></Select><Select value={timeRange} onValueChange={(value) => { const next = value as TimeRange; setTimeRange(next); refreshScope(next); }}><SelectTrigger className="h-9 w-28 bg-white text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="today">今天</SelectItem><SelectItem value="7d">近 7 天</SelectItem><SelectItem value="30d">近 30 天</SelectItem></SelectContent></Select><Button size="sm" variant="outline" onClick={() => refreshScope()}>刷新数据</Button></div></header>
+    <Card className="overflow-hidden border-slate-800 bg-slate-950 text-white"><CardContent className="grid p-0 lg:grid-cols-[1.4fr_1fr]"><div className="p-5 lg:border-r lg:border-slate-800"><div className="text-xs font-medium text-amber-300">客户运营结论</div><div className="mt-2 text-xl font-semibold">{warningAgent ? <>{warningAgent.agentName} 存在质量或运行风险，<span className="text-amber-300">建议优先处理问题样本</span></> : <>当前客户的已监测智能体运行稳定，<span className="text-emerald-300">暂无高优风险</span></>}</div><p className="mt-2 text-sm leading-6 text-slate-300">{warningAgent ? `建议先处理 ${summary.riskTraceCount} 条风险 Trace，结合会话上下文、Tool 和知识库证据定位原因。` : '继续按既定抽样策略观察会话与 Trace，并将新增风险样本纳入统一质检流程。'}</p></div><div className="grid grid-cols-3 divide-x divide-slate-800 p-5"><div className="px-3"><div className="text-xs text-slate-400">深度监测</div><div className="mt-1 text-3xl font-semibold">{agents.length}</div><div className="mt-1 text-[11px] text-slate-500">个目标智能体</div></div><div className="px-3"><div className="text-xs text-slate-400">风险 Trace</div><div className="mt-1 text-3xl font-semibold text-amber-300">{summary.riskTraceCount}</div><div className="mt-1 text-[11px] text-slate-500">等待复盘</div></div><div className="px-3"><div className="text-xs text-slate-400">异常智能体</div><div className="mt-1 text-3xl font-semibold text-rose-300">{agents.filter((item) => item.status !== 'healthy').length}</div><div className="mt-1 text-[11px] text-slate-500">需要关注</div></div></div></CardContent></Card>
+    <Card className="overflow-hidden"><CardContent className="grid grid-cols-2 p-0 md:grid-cols-3 xl:grid-cols-6">{[['会话量', summary.sessions.toLocaleString(), `${summary.turns.toLocaleString()} 对话轮次`], ['请求成功率', percentText(summary.successRate), '客户范围加权'], ['最慢 P95', `${(summary.p95ResponseMs / 1000).toFixed(1)}s`, '取已监测智能体最大值'], ['用户满意率', percentText(summary.satisfactionRate), '业务反馈口径'], ['风险 Trace', summary.riskTraceCount.toString(), '低分 / Tool / RAG'], ['模型成本', `¥${summary.totalCost.toLocaleString()}`, '当前统计周期']].map(([label, value, helper]) => <div key={label} className="border-r border-slate-100 px-4 py-3 last:border-r-0"><div className="text-[11px] text-slate-400">{label}</div><div className="mt-1 text-xl font-semibold text-slate-950">{value}</div><div className="mt-1 text-[11px] text-slate-400">{helper}</div></div>)}</CardContent></Card>
+    {agents.length === 0 ? <MonitoringEmptyState /> : <><section><div className="mb-3"><h2 className="text-base font-semibold text-slate-950">重点智能体监测</h2><p className="mt-1 text-xs text-slate-500">智能客服PRO与运营助手各自使用不同的质量评分卡和业务结果，不混用指标。</p></div><div className="grid gap-5 xl:grid-cols-2">{agents.map((agent) => <AgentMonitorCard key={agent.agentId} agent={agent} onOpen={() => { handleFetchAgentDetail(agent.agentId); navigate(`/platform/agent-observability/tenants/${tenantId}/agents/${agent.agentId}`); }} />)}</div></section>
+    <Card><CardHeader className="pb-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle className="text-base">跨智能体对照</CardTitle><p className="mt-1 text-xs text-slate-500">仅比较共享指标；专项质量分留在每张智能体卡片中。</p></div><Select value={activeAgentId} onValueChange={(value) => { setActiveAgentId(value); handleFetchTenantRiskTraces({ tenantId, timeRange, agentId: value === 'all' ? undefined : value }); }}><SelectTrigger className="h-8 w-40 bg-white text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部智能体</SelectItem>{agents.map((agent) => <SelectItem key={agent.agentId} value={agent.agentId}>{agent.agentName}</SelectItem>)}</SelectContent></Select></div></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>智能体</TableHead><TableHead>运行</TableHead><TableHead>Task Success</TableHead><TableHead>Correctness</TableHead><TableHead>Tool</TableHead><TableHead>RAG 证据</TableHead><TableHead>成本</TableHead></TableRow></TableHeader><TableBody>{agents.map((agent) => <TableRow key={agent.agentId}><TableCell><div className="font-medium">{agent.agentName}</div><div className="mt-1 text-xs text-slate-400">{agent.agentTypeLabel}</div></TableCell><TableCell><div>{percentText(agent.metrics.requestSuccessRate)} 成功</div><div className="mt-1 text-xs text-slate-400">P95 {(agent.metrics.p95ResponseMs / 1000).toFixed(1)}s</div></TableCell><TableCell className={metricTone(agent.metrics.taskSuccessScore * 100, 80)}>{scoreText(agent.metrics.taskSuccessScore)}</TableCell><TableCell className={metricTone(agent.metrics.correctnessScore * 100, 80)}>{scoreText(agent.metrics.correctnessScore)}</TableCell><TableCell><div>{agent.metrics.availableToolCount ?? '—'} 可用 / {agent.metrics.calledToolCount ?? '—'} 调用</div><div className="mt-1 text-xs text-slate-400">成功 {percentText(agent.metrics.toolSuccessRate)}{agent.scorecard.kind === 'customer_service' ? ` · 选择 ${scoreText(agent.scorecard.toolSelectionScore)}` : ''}</div></TableCell><TableCell><div>调用 {agent.metrics.ragCallRate === null ? '—' : percentText(agent.metrics.ragCallRate)} · 命中 {agent.metrics.ragHitRate === null ? '—' : percentText(agent.metrics.ragHitRate)}</div><div className="mt-1 text-xs text-slate-400">Query {agent.metrics.ragQueryQualityScore == null ? '—' : scoreText(agent.metrics.ragQueryQualityScore)} · Grounded {agent.metrics.groundednessScore === null ? '未评估' : scoreText(agent.metrics.groundednessScore)}</div></TableCell><TableCell>¥{agent.metrics.costPerRequest.toFixed(2)} / 次</TableCell></TableRow>)}</TableBody></Table></CardContent></Card>
+    <Card><CardHeader className="pb-3"><div className="flex flex-wrap items-center justify-between gap-3"><div><CardTitle className="text-base">风险样本</CardTitle><p className="mt-1 text-xs text-slate-500">风险样本是从每轮 Trace 中筛出的异常、点踩、未回答、低分和 Tool / RAG 问题。</p></div><Badge className="border-amber-200 bg-amber-50 text-amber-700">{risks.length} 条</Badge></div></CardHeader><CardContent><Table><TableHeader><TableRow><TableHead>风险 / 状态</TableHead><TableHead>智能体 / Trace</TableHead><TableHead>问题</TableHead><TableHead>来源信号</TableHead><TableHead>评分与诊断</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader><TableBody>{risks.length === 0 ? <TableRow><TableCell colSpan={6} className="py-10 text-center text-slate-400">当前范围没有风险 Trace。</TableCell></TableRow> : risks.map((item) => { const risk = item.trace.risk; const agentName = agents.find((agent) => agent.agentId === item.agentId)?.agentName ?? item.agentId; return <TableRow key={item.trace.traceId}><TableCell><Badge className={RISK_CONFIG[risk.riskLevel].cls}>{RISK_CONFIG[risk.riskLevel].label}</Badge><div className="mt-2"><Badge className={RISK_REVIEW_STATUS_CONFIG[risk.reviewStatus].cls}>{RISK_REVIEW_STATUS_CONFIG[risk.reviewStatus].label}</Badge></div></TableCell><TableCell><div className="font-medium">{agentName}</div><button className="mt-1 font-mono text-[11px] text-blue-600 hover:underline" onClick={() => navigate(tracePathWithReturn({ tenantId, agentId: item.agentId, sessionId: item.sessionId, traceId: item.trace.traceId }, { returnTo: `/platform/agent-observability/tenants/${tenantId}`, returnLabel: '返回客户监控' }))}>{item.trace.traceId}</button></TableCell><TableCell className="max-w-[260px]"><div className="line-clamp-2">{item.trace.input}</div><div className="mt-1 text-xs text-slate-400">{risk.issueType} · {item.trace.occurredAt}</div></TableCell><TableCell><div className="flex max-w-[220px] flex-wrap gap-1">{risk.sourceSignals.map((signal) => <Badge key={signal} className={signal === 'alert' ? 'border-rose-100 bg-rose-50 text-rose-700' : 'border-slate-200 bg-slate-50 text-slate-600'}>{RISK_SOURCE_CONFIG[signal]}</Badge>)}</div></TableCell><TableCell className="max-w-[300px]"><div className="text-xs text-slate-400">{risk.scoreName} <span className="font-semibold text-slate-700">{scoreText(risk.score)}</span></div><div className="mt-1 text-xs leading-5 text-slate-500">{risk.diagnosis}</div></TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => navigate(`/platform/agent-observability/tenants/${tenantId}/agents/${item.agentId}/quality-reviews?traceId=${item.trace.traceId}`)}>处理风险</Button></TableCell></TableRow>; })}</TableBody></Table></CardContent></Card></>}
+  </div></div>;
+}
