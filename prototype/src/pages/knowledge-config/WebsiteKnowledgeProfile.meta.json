@@ -1,0 +1,44 @@
+{
+  "page": "WebsiteKnowledgeProfile",
+  "dataSources": [
+    {
+      "name": "mockProfilesData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/kb/website-profile"
+      },
+      "queryParams": [
+        "siteId"
+      ]
+    },
+    {
+      "name": "mockSitesData",
+      "shape": "array",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/kb/portal-sites"
+      }
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleFetchProfile",
+      "endpoint": {
+        "method": "GET",
+        "path": "/api/kb/website-profile"
+      },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleRegenerate",
+      "endpoint": {
+        "method": "POST",
+        "path": "/api/kb/website-profile/regenerate"
+      },
+      "requestFrom": "param",
+      "responseShape": "object"
+    }
+  ]
+}

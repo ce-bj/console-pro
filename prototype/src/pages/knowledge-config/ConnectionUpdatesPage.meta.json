@@ -1,0 +1,79 @@
+{
+  "page": "ConnectionUpdatesPage",
+  "dataSources": [
+    {
+      "name": "mockSourceConnectionsPageData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/source-connections" },
+      "queryParams": ["keyword", "section", "kind"]
+    },
+    {
+      "name": "mockKnowledgeUpdatesData",
+      "shape": "array",
+      "endpoint": { "method": "GET", "path": "/api/kb/assets/updates" },
+      "queryParams": ["keyword", "section"]
+    }
+  ],
+  "actions": [
+    {
+      "handler": "handleDetect",
+      "endpoint": { "method": "POST", "path": "/api/kb/source-connections/{id}/detect" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleBatchSources",
+      "endpoint": { "method": "POST", "path": "/api/kb/source-connections/batch" },
+      "requestFrom": "body",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFetchSourceConnections",
+      "endpoint": { "method": "GET", "path": "/api/kb/source-connections" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleFetchKnowledgeUpdates",
+      "endpoint": { "method": "GET", "path": "/api/kb/assets/updates" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    },
+    {
+      "handler": "handleSyncNow",
+      "endpoint": { "method": "POST", "path": "/api/kb/source-connections/{id}/sync" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleAutoUpdate",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/source-connections/{id}/auto-update" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleFrequency",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/source-connections/{id}/frequency" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleSourceEnabled",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/source-connections/{id}/enabled" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleUpload",
+      "endpoint": { "method": "PUT", "path": "/api/kb/assets/{id}/file" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleHealth",
+      "endpoint": { "method": "POST", "path": "/api/kb/assets/health-check" },
+      "requestFrom": "param",
+      "responseShape": "array"
+    }
+  ]
+}

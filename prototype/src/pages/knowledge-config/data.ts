@@ -249,18 +249,18 @@ export const SECTIONS: KbSection[] = [
   },
   {
     key: 'structured', index: '③', name: '结构化数据', en: 'Structured', emoji: '🗄️',
-    define: '数据库里的字段型记录',
+    define: '上传表格与平台业务中的字段型记录',
     sample: '产品参数、价格、库存、SKU、上下架状态、订单、会员等级',
-    ingest: '连库 / 配置 MCP 工具', process: '不分块，MCP 工具直查',
-    update: '实时直查 + 游标增量', evaluate: 'Schema / 枚举 / 慢查询',
-    retrieval: '数据库 MCP', retrievalCls: 'bg-amber-50 text-amber-600',
+    ingest: '上传文件 / 关联后台字段', process: '保留记录、类型和单位',
+    update: '文件更新 / 业务源更新', evaluate: '字段完整性 / 标识重复 / 数据时效',
+    retrieval: '字段查询', retrievalCls: 'bg-amber-50 text-amber-600',
     chunkMethod: '不分块（参数化查询）', vectorWeight: 0, threshold: 0, rerank: '不适用',
     source5: '④a 门户结构化业务数据', docCount: 4, health: 95,
     embeddingModel: '—', topK: 0, metaChunkingEnabled: false,
     taskPageSize: 0, pdfParser: '不适用', chunkTokenSize: 0, chunkDelimiter: '',
     useSubChunksForRetrieval: false, pageIndexEnabled: false, imageTableContextWindow: 0,
     autoMetadataEnabled: false, autoMetadataFields: [], autoKeywordCount: 0, autoQuestionCount: 0,
-    privacyMaskEnabled: false, privacyMaskTypes: [], dedupEnabled: false, dedupStrategy: '关闭', qualityScoreThreshold: 0,
+    privacyMaskEnabled: false, privacyMaskTypes: [], dedupEnabled: true, dedupStrategy: '按来源记录标识', qualityScoreThreshold: 60,
   },
   {
     key: 'content', index: '④', name: '内容资产', en: 'Content', emoji: '📰',
@@ -391,15 +391,14 @@ export const mockMcpActions: McpAction[] = [
 export const BOARD_HOWTO: Record<SectionKey, { handle: string; retrieve: string }> = {
   document: { handle: '上传后自动识别版面与表格，按章节+段落切分学习', retrieve: '按语义找最相关的段落，带出处回答' },
   faq: { handle: '一问一答整条学习，可补近义问法', retrieve: '关键词强命中标准答案，准而稳' },
-  structured: { handle: '不复制内容，连接数据库实时查询', retrieve: '按字段精确筛选/排序/计数，0 延迟' },
+  structured: { handle: '上传文件解析为记录，平台来源保留产品与规格关联', retrieve: '按编号、关键词、数值条件检索授权字段' },
   content: { handle: '网站发布后自动同步，按段落学习', retrieve: '语义+标题混合匹配，适合问答与内容生成' },
   web: { handle: '按设定频率自动抓取外部网页正文', retrieve: '按语义找相关网页内容' },
   industry: { handle: '深度长资料做多级摘要，支持跨文档对比', retrieve: '多跳推理，适合行业分析' },
 };
 
-// ── 来源方式：资产直接携带"怎么来的"，不再单独建一层数据源实体 ──────────
-// RAGFlow 的心智模型：知识库（=我们的板块，已配置好处理方式）里直接是一张扁平文件列表，
-// 新增内容 = 在列表上选一种来源方式当场生成一行，不需要先建一个独立的"数据源"再挂内容。
+// ── 来源方式：单条资产保留来源；前后台栏目接入关系在 sourceConnections 中维护 ──
+// 栏目与知识是一对多关系，接入范围和差异处理独立于单条知识的生命周期。
 export type ConnectType = '上传文件' | '前台页面' | '后台页面' | '外部网址' | '平台';
 export const CONNECT_TYPES: ConnectType[] = ['上传文件', '前台页面', '后台页面', '外部网址', '平台'];
 export const SYNC_TYPES = ['实时同步', '定时同步', '手动'];
@@ -479,12 +478,7 @@ export const mockFrontendSiteTree: FrontendNavGroup[] = [
     ], bindings: ['certificates.list'] },
   ] },
   { siteId: 'site_cn', siteName: '中文站', navPath: ['产品中心'], pages: [
-    { id: 'fp_products_cn', siteId: 'site_cn', siteName: '中文站', title: '产品列表', route: '/products', navPath: ['产品中心', '产品列表'], pageType: '列表页', contentSource: '前台产品列表数据', sourceDataMode: '结构化字段', board: 'structured', structuredFields: [
-      { field: 'sku', label: 'SKU', type: 'text', example: 'KFR-35' },
-      { field: 'price', label: '价格', type: 'number', example: '1299' },
-      { field: 'stock', label: '库存', type: 'number', example: '260' },
-      { field: 'status', label: '上下架状态', type: 'text', example: '在售' },
-    ], bindings: ['products.list', 'products.filters'] },
+    { id: 'fp_products_cn', siteId: 'site_cn', siteName: '中文站', title: '产品列表', route: '/products', navPath: ['产品中心', '产品列表'], pageType: '列表页', contentSource: '前台页面正文', sourceDataMode: '页面正文', board: 'content', bindings: ['products.list', 'products.filters'] },
     { id: 'fp_product_detail_cn', siteId: 'site_cn', siteName: '中文站', title: 'KFR-35 空气滤清器详情', route: '/products/kfr-35', navPath: ['产品中心', '空气滤清器', 'KFR-35'], pageType: '详情页', contentSource: '前台产品详情页', sourceDataMode: '页面正文+结构化字段', board: 'content', structuredFields: [
       { field: 'model', label: '型号', type: 'text', example: 'KFR-35' },
       { field: 'fitment', label: '适配车型', type: 'text', example: 'Anvil A7' },
@@ -504,11 +498,7 @@ export const mockFrontendSiteTree: FrontendNavGroup[] = [
     ], bindings: ['news.list', 'news.detail'] },
   ] },
   { siteId: 'site_cn', siteName: '中文站', navPath: ['联系我们'], pages: [
-    { id: 'fp_stores_cn', siteId: 'site_cn', siteName: '中文站', title: '企业网点', route: '/contact/stores', navPath: ['联系我们', '企业网点'], pageType: '网点页', contentSource: '前台网点列表', sourceDataMode: '结构化字段', board: 'structured', structuredFields: [
-      { field: 'store_name', label: '网点名称', type: 'text', example: '上海服务中心' },
-      { field: 'address', label: '地址', type: 'text', example: '上海市浦东新区...' },
-      { field: 'phone', label: '电话', type: 'text', example: '400-800-0000' },
-    ], bindings: ['stores.list', 'stores.map'] },
+    { id: 'fp_stores_cn', siteId: 'site_cn', siteName: '中文站', title: '企业网点', route: '/contact/stores', navPath: ['联系我们', '企业网点'], pageType: '网点页', contentSource: '前台页面正文', sourceDataMode: '页面正文', board: 'content', bindings: ['stores.list', 'stores.map'] },
   ] },
 ];
 
@@ -526,6 +516,7 @@ export interface BackendPageSource {
 }
 
 export const mockBackendPageSources: BackendPageSource[] = [
+  { id: 'be_product_product', applicationName: '产品管理', pageName: '产品', backendPath: 'product.list', frontendRoute: '/products/:id', sourceDataMode: '页面正文+结构化字段', contentCount: 128, updatedAt: '2026-09-30 09:00' },
   { id: 'be_tender', applicationName: '采购招标', pageName: '采购招标列表', backendPath: 'tender.list', frontendRoute: '/tenders', sourceDataMode: '页面正文+结构化字段', contentCount: 86, updatedAt: '2026-08-12 16:20' },
   { id: 'be_tender_result', applicationName: '采购招标', pageName: '中标公告', backendPath: 'tender.result', frontendRoute: '/tenders/results', sourceDataMode: '页面正文', contentCount: 41, updatedAt: '2026-08-12 16:18' },
   { id: 'be_custom_page', applicationName: '说明页', pageName: '自定义内容页', backendPath: 'page.content', frontendRoute: '/pages/:slug', sourceDataMode: '页面正文', contentCount: 24, updatedAt: '2026-08-11 10:08' },
@@ -537,6 +528,16 @@ export const mockBackendPageSources: BackendPageSource[] = [
 
 // ── DataSlot: 知识资产目录（全部板块，跨门户网站共用检索，按需勾选适用站点）──
 export interface KbAsset {
+  structuredRecords?: Array<Record<string, string | number>>;
+  structuredRecordIds?: string[];
+  structuredRecordMetadata?: Record<string, { enabled: boolean; keywords: string[]; questions: string[]; tags: string[] }>;
+  structuredCapabilityDefaults?: Record<string, import('./structuredPolicy').FieldCapabilities>;
+  structuredCapabilities?: Record<string, Partial<import('./structuredPolicy').FieldCapabilities>>;
+  structuredSchema?: Array<{ name: string; label: string; type: string; unit?: string; searchable?: boolean }>;
+  structuredChildSchema?: Array<{ name: string; label: string; type: string; unit?: string }>;
+  structuredChildRecords?: Record<string, Array<Record<string, string | number>>>;
+  structuredSelection?: { application: string; sourceId: string; schemaVersion: number; includeChildren: boolean; childName?: string };
+  structuredConfig?: { source: string; fileName?: string; key: string; parentKey: string; fields: string[]; searchable: string[]; units: Record<string, string>; updateMode: string };
   id: string;
   name: string;
   section: SectionKey;
@@ -618,7 +619,7 @@ export const mockIndustryLibrary: IndustryLibraryItem[] = [
 export const mockAssets: KbAsset[] = [
   { id: 'k1', name: 'Anvil 产品白皮书.pdf', section: 'document', connect: '上传文件', sync: '手动', freq: '手动', lastSync: '2026-06-01', nextSync: '—', syncStatus: 'ok', fileSize: '4.8 MB', industry: '制造业与工业', knowledgeBaseType: '企业业务知识库', primaryCategory: '产品与资源', secondaryCategory: '产品手册', contentFormat: '手册', validityStatus: '现行有效', source: '企业产品资料', audience: '企业', language: '简体中文', portalSites: ['site_cn', 'site_en'], businessTag: '售前', scene: '客服', timeliness: '静态', access: '公开', status: 'published', health: 91, chunks: 248, createdAt: '2026-05-20', createdBy: '王芳（内容运营）', updatedAt: '2026-06-01', tags: ['Anvil', '白皮书', '保修条款'], sourceRef: 'Anvil 产品白皮书.pdf · p.12 §3.2' },
   { id: 'k2', name: '常见问题 · 退换货流程 FAQ（120 条）', section: 'faq', connect: '后台页面', backendPageId: 'be_custom_page', backendPath: 'page.content', sync: '手动', freq: '手动', lastSync: '2026-06-29 09:15', nextSync: '—', syncStatus: 'ok', reviewed: true, sourceDataMode: '结构化字段', structuredFields: ['question', 'answer'], industry: '商业、零售与电子商务', knowledgeBaseType: '企业公共知识库', primaryCategory: '企业通用问答', secondaryCategory: '账户与登录', contentFormat: '问答对', validityStatus: '现行有效', source: '企业帮助中心', audience: '公众', language: '简体中文', portalSites: [], businessTag: '售后', scene: '客服', timeliness: '小时', access: '公开', status: 'published', health: 94, chunks: 120, createdAt: '2026-04-02', createdBy: '系统同步 · 后台发布', updatedAt: '2026-06-18', tags: ['退货', '换货', '售后流程'], sourceRef: '企业帮助中心 · 标准问：怎么退货' },
-  { id: 'k3', name: '产品列表 · 规格/价格/库存', section: 'structured', connect: '前台页面', sync: '实时同步', freq: '实时', lastSync: '刚刚', nextSync: '实时', syncStatus: 'ok', frontendPageId: 'fp_products_cn', frontendRoute: '/products', frontendNavPath: '产品中心 / 产品列表', sourceDataMode: '结构化字段', structuredFields: ['sku', 'price', 'stock', 'status'], industry: '制造业与工业', knowledgeBaseType: '企业业务知识库', primaryCategory: '数据与报告', secondaryCategory: '', contentFormat: '结构化记录', validityStatus: '现行有效', source: '企业产品数据库', audience: '企业', language: '简体中文', portalSites: [], businessTag: '售前', scene: '客服', timeliness: '实时', access: '公开', status: 'published', health: 96, chunks: 0, createdAt: '2026-01-07', createdBy: '系统同步 · 前台页面', updatedAt: '2026-06-29', tags: ['价格', '库存', 'SKU'], sourceRef: '前台页面 /products · MCP search_products' },
+  { id: 'k3', name: '产品列表', section: 'content', connect: '前台页面', sync: '实时同步', freq: '实时', lastSync: '刚刚', nextSync: '内容发布时', syncStatus: 'ok', frontendPageId: 'fp_products_cn', frontendRoute: '/products', frontendNavPath: '产品中心 / 产品列表', sourceDataMode: '页面正文', industry: '制造业与工业', knowledgeBaseType: '企业业务知识库', primaryCategory: '产品与资源', secondaryCategory: '产品信息', contentFormat: '文章', validityStatus: '现行有效', source: '企业前台网站', audience: '企业', language: '简体中文', portalSites: ['site_cn'], businessTag: '售前', scene: '客服', timeliness: '实时', access: '公开', status: 'published', health: 96, chunks: 48, createdAt: '2026-01-07', createdBy: '系统同步 · 前台页面', updatedAt: '2026-06-29', tags: ['产品列表', '规格', '价格'], sourceRef: '前台页面 /products' },
   { id: 'k4', name: 'KFR-35 空气滤清器图文详情', section: 'content', connect: '前台页面', sync: '实时同步', freq: '实时', lastSync: '2026-06-25 14:02', nextSync: '内容更新时', syncStatus: 'ok', frontendPageId: 'fp_product_detail_cn', frontendRoute: '/products/kfr-35', frontendNavPath: '产品中心 / 空气滤清器 / KFR-35', sourceDataMode: '页面正文+结构化字段', structuredFields: ['model', 'fitment', 'maintenance_cycle'], industry: '制造业与工业', knowledgeBaseType: '企业业务知识库', primaryCategory: '产品与资源', secondaryCategory: '产品信息', contentFormat: '文章', validityStatus: '现行有效', source: '企业产品中心', audience: '企业', language: '简体中文', portalSites: ['site_cn', 'site_en'], businessTag: '售前', scene: '客服/内容生成', timeliness: '每日', access: '公开', status: 'published', health: 83, chunks: 36, createdAt: '2026-03-15', createdBy: '系统同步 · 前台页面', updatedAt: '2026-06-25', tags: ['KFR-35', '空气滤清器', '滤芯保养'], sourceRef: '前台页面 /products/kfr-35 · 发布于 06-25' },
   { id: 'k5', name: '竞品官网监控（每日抓取）', section: 'web', connect: '外部网址', sync: '定时同步', freq: '每日', lastSync: '2026-06-28 02:00', nextSync: '2026-06-30 02:00', syncStatus: 'failed', siteUrl: 'https://competitor.example/products', groupLabel: '行业资讯源', note: '重点关注竞品价格与新品发布', industry: '制造业与工业', knowledgeBaseType: '企业业务知识库', primaryCategory: '产品与资源', secondaryCategory: '产品信息', contentFormat: '文章', validityStatus: '现行有效', source: '企业产品中心', audience: '企业', language: '简体中文', portalSites: ['site_cn'], businessTag: '营销', scene: '内容生成', timeliness: '每日', access: '内部', status: 'stale', health: 68, chunks: 54, createdAt: '2026-02-10', createdBy: '系统抓取 · 定时任务', updatedAt: '2026-06-20', tags: ['竞品', '行业动态', '营销素材'], sourceRef: 'https://competitor.example/products · 抓取于 06-20' },
   { id: 'k11', name: '行业协会官网监控（每日抓取）', section: 'web', connect: '外部网址', sync: '定时同步', freq: '每日', lastSync: '2026-06-29 02:00', nextSync: '2026-06-30 02:00', syncStatus: 'ok', siteUrl: 'https://auto.gasgoo.com/news', groupLabel: '行业资讯源', note: '重点关注竞品价格与新品发布', industry: '制造业与工业', knowledgeBaseType: '企业业务知识库', primaryCategory: '产品与资源', secondaryCategory: '产品信息', contentFormat: '文章', validityStatus: '现行有效', source: '企业产品中心', audience: '企业', language: '简体中文', portalSites: ['site_cn'], businessTag: '营销', scene: '内容生成', timeliness: '每日', access: '内部', status: 'published', health: 79, chunks: 31, createdAt: '2026-06-29', createdBy: '系统抓取 · 定时任务', updatedAt: '2026-06-29', tags: ['行业协会', '行业动态'], sourceRef: 'https://auto.gasgoo.com/news · 抓取于 06-29' },
@@ -628,9 +629,44 @@ export const mockAssets: KbAsset[] = [
   { id: 'k9', name: '医疗站 · 导诊 FAQ', section: 'faq', connect: '后台页面', backendPageId: 'be_city_product', backendPath: 'city_product.list', sync: '手动', freq: '手动', lastSync: '2026-06-29 09:15', nextSync: '—', syncStatus: 'ok', sourceDataMode: '结构化字段', structuredFields: ['question', 'answer'], industry: '医疗、健康与养老', knowledgeBaseType: '企业公共知识库', primaryCategory: '用户服务', secondaryCategory: '服务渠道', contentFormat: '问答对', validityStatus: '现行有效', source: '医疗站帮助中心', audience: '个人', language: '简体中文', portalSites: ['site_cn'], businessTag: '售前', scene: '客服', timeliness: '小时', access: '公开', status: 'published', health: 90, chunks: 88, createdAt: '2026-01-09', createdBy: '系统同步 · 后台发布', updatedAt: '2026-06-15', tags: ['导诊', '挂号', '医疗流程'], sourceRef: '医疗站帮助中心 · 标准问：挂号流程' },
   { id: 'k10', name: '旧版 GB/T 18488 标准（已替代）', section: 'industry', connect: '平台', sync: '定时同步', freq: '每周', lastSync: '2026-06-20', nextSync: '2026-06-27', syncStatus: 'failed', industry: '制造业与工业', knowledgeBaseType: '行业知识库', primaryCategory: '标准规范', secondaryCategory: '国家标准', contentFormat: '政策', validityStatus: '已失效', source: '国家标准资料库', audience: '企业', language: '简体中文', portalSites: [], businessTag: '售前', scene: '内容生成', timeliness: '静态', access: '内部', status: 'archived', health: 41, chunks: 156, createdAt: '2025-08-01', createdBy: '张伟（内容运营）', updatedAt: '2026-03-12', tags: ['GB/T 18488', '已替代', '待归档'], sourceRef: 'GB/T 18488-2015（已被 2025 版替代）', industrySourceId: 'lib_mfg_1', industrySourceVersion: 1 },
   { id: 'k12', name: '制造业行业常见问题汇编', section: 'industry', connect: '平台', sync: '定时同步', freq: '每周', lastSync: '2026-06-06', nextSync: '2026-06-13', syncStatus: 'ok', industry: '制造业与工业', knowledgeBaseType: '行业知识库', primaryCategory: '常见问题', secondaryCategory: '', contentFormat: '指南', validityStatus: '现行有效', source: '行业协会', audience: '从业人员', language: '简体中文', portalSites: [], businessTag: '售前', scene: '客服', timeliness: '静态', access: '内部', status: 'published', health: 88, chunks: 58, createdAt: '2026-06-05', createdBy: '张伟（内容运营）', updatedAt: '2026-06-05', tags: ['制造业', 'FAQ', '行业知识库'], sourceRef: '行业知识库 · 制造业行业常见问题汇编（v1）', industrySourceId: 'lib_mfg_3', industrySourceVersion: 1 },
+  { id: 'k13', name: '银川', section: 'content', connect: '后台页面', sync: '定时同步', freq: '每日', lastSync: '2026-09-28 02:00', nextSync: '自动更新已关闭', syncStatus: 'paused', backendPageId: 'be_city_product', backendPath: 'city_product.list', frontendRoute: '/city/yinchuan/products', sourceDataMode: '页面正文+结构化字段', industry: '商业、零售与电子商务', knowledgeBaseType: '企业公共知识库', primaryCategory: '产品与资源', secondaryCategory: '产品信息', contentFormat: '文章', validityStatus: '现行有效', source: '城市产品分站 · 银川', audience: '所有人', language: '简体中文', portalSites: ['site_cn'], businessTag: '售前', scene: '客服/内容生成', timeliness: '每日', access: '公开', status: 'published', health: 82, chunks: 12, createdAt: '2026-09-26', createdBy: '系统同步 · 后台页面', updatedAt: '2026-09-28', tags: ['银川', '城市产品'], sourceRef: '城市产品分站 / 城市产品列表 / 银川' },
+  { id: 'k14', name: '汉中', section: 'content', connect: '后台页面', sync: '定时同步', freq: '每日', lastSync: '2026-09-28 02:00', nextSync: '自动更新已关闭', syncStatus: 'paused', backendPageId: 'be_city_product', backendPath: 'city_product.list', frontendRoute: '/city/hanzhong/products', sourceDataMode: '页面正文+结构化字段', industry: '商业、零售与电子商务', knowledgeBaseType: '企业公共知识库', primaryCategory: '产品与资源', secondaryCategory: '产品信息', contentFormat: '文章', validityStatus: '现行有效', source: '城市产品分站 · 汉中', audience: '所有人', language: '简体中文', portalSites: ['site_cn'], businessTag: '售前', scene: '客服/内容生成', timeliness: '每日', access: '公开', status: 'published', health: 80, chunks: 10, createdAt: '2026-09-26', createdBy: '系统同步 · 后台页面', updatedAt: '2026-09-28', tags: ['汉中', '城市产品'], sourceRef: '城市产品分站 / 城市产品列表 / 汉中' },
 ];
 
 // 原型内的轻量共享仓库：让目录新增/编辑后，详情页能读取到同一份 mock 数据。
+const structuredExampleRecords = [
+  { product_id: 'P1001', sku: 'P1001-R-S', name: '经典款包装产品', color: '红', size: '小', weight: 1, material: '不锈钢' },
+  { product_id: 'P1001', sku: 'P1001-R-L', name: '经典款包装产品', color: '红', size: '大', weight: 2, material: '不锈钢' },
+  { product_id: 'P1002', sku: 'P1002-B-S', name: '2026 款包装产品', color: '蓝', size: '小', weight: 1.2, material: '铝合金' },
+];
+mockAssets.push(...(['platform', 'excel', 'jsonl'] as const).map((kind): KbAsset => ({
+  ...mockAssets[0], id: `structured-${kind}`, name: kind === 'platform' ? '产品管理 / 产品' : kind === 'excel' ? '产品规格参数.xlsx' : '产品属性.jsonl',
+  section: 'structured', connect: kind === 'platform' ? '后台页面' : '上传文件', source: kind === 'platform' ? '产品管理 / 产品规格' : '上传文件',
+  sourceRef: kind === 'platform' ? '产品管理 / 产品规格' : kind === 'excel' ? '产品规格参数.xlsx' : '产品属性.jsonl',
+  backendPageId: kind === 'platform' ? 'be_product_product' : undefined, backendPath: kind === 'platform' ? 'product.list' : undefined,
+  status: 'published', contentFormat: '结构化记录', chunks: 0, primaryCategory: '产品与资源', secondaryCategory: '产品信息',
+  structuredFields: ['product_id', 'sku', 'name', 'color', 'size', 'weight', 'material'], structuredRecords: structuredExampleRecords.map(r => ({ ...r })),
+  tags: ['产品参数', '展示示例'], fileSize: kind === 'platform' ? undefined : '0.2 MB', timeliness: kind === 'platform' ? '实时' : '静态',
+  sync: kind === 'platform' ? '实时同步' : '手动', freq: kind === 'platform' ? '实时' : '手动', nextSync: kind === 'platform' ? '来源更新时' : '更新文件后处理',
+  updatedAt: '2026-09-30', lastSync: '2026-09-30 09:30', summary: '结构化数据展示示例，按产品与 SKU 查询字段。',
+})));
+// 普通产品接入不自动包含规格；产品规格从特殊数据独立接入。
+const productDatasetExample = mockAssets.find(a => a.id === 'structured-platform')!;
+Object.assign(productDatasetExample, {
+  source: '产品管理 / 产品', sourceRef: '产品管理 / 产品',
+  structuredSelection: { application: '产品管理', sourceId: 'be_product_product', schemaVersion: 3, includeChildren: false },
+  structuredFields: ['product_id', 'name', 'material'],
+  structuredSchema: [{ name: 'product_id', label: '产品编号', type: '文本' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'material', label: '材质', type: '文本' }],
+  structuredRecords: [{ product_id: 'P1001', name: '经典款包装产品', material: '不锈钢' }, { product_id: 'P1002', name: '2026 款包装产品', material: '铝合金' }],
+});
+for (const asset of mockAssets.filter(a => a.id === 'structured-excel' || a.id === 'structured-jsonl')) {
+  asset.structuredSchema = [{ name: 'product_id', label: '产品编号', type: '文本' }, { name: 'sku', label: 'SKU', type: '文本' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'color', label: '颜色', type: '单选框' }, { name: 'size', label: '包装大小', type: '单选框' }, { name: 'weight', label: '重量', type: '数值', unit: 'kg' }, { name: 'material', label: '材质', type: '文本' }];
+  asset.structuredRecordMetadata = {
+    [asset.id + ':record:0']: { enabled: true, keywords: ['红色', '小包装'], questions: ['经典款红色小包装的重量是多少？'], tags: ['售前选型'] },
+    [asset.id + ':record:1']: { enabled: false, keywords: ['大包装'], questions: [], tags: ['待核对'] },
+  };
+}
+mockAssets.push({ ...mockAssets[0], id: 'structured-tenders', name: '采购招标 / 中标公告', section: 'structured', connect: '后台页面', backendPageId: 'be_tender_result', backendPath: 'tender.result', source: '采购招标 / 中标公告', sourceRef: '采购招标 / 中标公告', contentFormat: '结构化记录', chunks: 0, fileSize: undefined, tags: ['公告', '展示示例'], structuredFields: ['title', 'winner'], structuredSchema: [{ name: 'title', label: '公告标题', type: '文本' }, { name: 'winner', label: '中标单位', type: '文本' }], structuredRecords: [{ title: '年度设备采购中标公告', winner: '甲方设备有限公司' }, { title: '办公耗材采购中标公告', winner: '乙方办公用品有限公司' }] });
 export const getKnowledgeAsset = (id: string) => mockAssets.find((a) => a.id === id);
 export function upsertKnowledgeAsset(asset: KbAsset) {
   const index = mockAssets.findIndex((a) => a.id === asset.id);

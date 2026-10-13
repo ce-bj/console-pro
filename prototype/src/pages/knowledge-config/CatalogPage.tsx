@@ -2,6 +2,7 @@
 // 出处：架构 §3.5/§7.1（元数据规范作为表单字段）
 import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import ProfileReturnBanner from './ProfileReturnBanner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +33,7 @@ import {
   canChangeEnterpriseIndustries, nextIndustryChangeDate, setEnterpriseIndustries,
 } from './data';
 import { SectionTag, StatusActions, PageHeader } from './shared';
+import { mockSourceConnectionsData } from './sourceConnections';
 
 type Row = KbAsset & { enabled: boolean };
 const toRow = (a: KbAsset): Row => ({
@@ -67,7 +69,7 @@ const defaultDocumentMetadata = (): DocumentMetadataDraft => ({
 });
 
 function sourceLabelOf(connect: ConnectType, section: SectionKey): string {
-  if (connect === '前台页面') return section === 'structured' ? '前台结构化数据' : '企业前台网站';
+  if (connect === '前台页面') return '企业前台网站';
   if (connect === '外部网址') return '外部网站';
   if (connect === '平台') return '平台维护内容';
   if (connect === '后台页面') return '企业后台录入';
@@ -245,7 +247,7 @@ const mockAssetOpLogsData: Record<string, AssetOpLog[]> = {
 };
 
 // ACTION: 获取知识资产列表 [GET] /api/kb/assets
-function handleFetchKnowledgeAssets(params: { section?: SectionKey | 'all'; status?: KbStatus | 'all'; connect?: ConnectType | 'all'; knowledgeBaseType?: KnowledgeBaseType | 'all'; industry?: string; primaryCategory?: string; secondaryCategory?: string; contentFormat?: ContentFormat | 'all'; validityStatus?: ValidityStatus | 'all'; timeliness?: Timeliness | 'all'; audience?: string; language?: string; tag?: string; keyword?: string }) {
+function handleFetchKnowledgeAssets(params: { section?: SectionKey | 'all'; status?: KbStatus | 'all'; connect?: ConnectType | 'all'; sourceId?: string; knowledgeBaseType?: KnowledgeBaseType | 'all'; industry?: string; primaryCategory?: string; secondaryCategory?: string; contentFormat?: ContentFormat | 'all'; validityStatus?: ValidityStatus | 'all'; timeliness?: Timeliness | 'all'; audience?: string; language?: string; tag?: string; keyword?: string }) {
   console.log('fetch knowledge assets', params);
 }
 
@@ -378,6 +380,7 @@ export default function CatalogPage() {
   const [sectionFilter, setSectionFilter] = useState<'all' | SectionKey>(initialSection && SECTION_MAP[initialSection] ? initialSection : 'all');
   const [statusFilter, setStatusFilter] = useState<'all' | KbStatus>(initialStatus && STATUS_LABEL[initialStatus] ? initialStatus : 'all');
   const [connectFilter, setConnectFilter] = useState<'all' | ConnectType>('all');
+  const [sourceConnectionFilter, setSourceConnectionFilter] = useState(searchParams.get('source') || 'all');
   const [knowledgeBaseTypeFilter, setKnowledgeBaseTypeFilter] = useState<'all' | KnowledgeBaseType>('all');
   const [industryFilter, setIndustryFilter] = useState<'all' | string>('all');
   const [primaryCategoryFilter, setPrimaryCategoryFilter] = useState<'all' | string>('all');
@@ -427,7 +430,7 @@ export default function CatalogPage() {
 
   // DataSlot 初始化：列表、前台结构和修复流水
   useEffect(() => {
-    handleFetchKnowledgeAssets({ section: sectionFilter, status: statusFilter, connect: connectFilter, knowledgeBaseType: knowledgeBaseTypeFilter, industry: industryFilter, primaryCategory: primaryCategoryFilter, secondaryCategory: secondaryCategoryFilter, contentFormat: contentFormatFilter, validityStatus: validityStatusFilter, timeliness: timelinessFilter, audience: audienceFilter, language: languageFilter, tag: tagFilter, keyword: q });
+    handleFetchKnowledgeAssets({ section: sectionFilter, status: statusFilter, connect: connectFilter, sourceId: sourceConnectionFilter === 'all' ? undefined : sourceConnectionFilter, knowledgeBaseType: knowledgeBaseTypeFilter, industry: industryFilter, primaryCategory: primaryCategoryFilter, secondaryCategory: secondaryCategoryFilter, contentFormat: contentFormatFilter, validityStatus: validityStatusFilter, timeliness: timelinessFilter, audience: audienceFilter, language: languageFilter, tag: tagFilter, keyword: q });
     handleFetchFrontendSiteStructure({ siteIds: [] });
     handleFetchRepairLogs({ limit: 20 });
     if (searchParams.get('check') === '1') setCheckFilter('defect');
@@ -685,6 +688,7 @@ export default function CatalogPage() {
 
   // 先按常规筛选缩小范围，体检结论作为最后一层：这样问题分布条上的数量与点开后的列表条数始终一致
   const scopedRows = rows.filter((r) =>
+    (sourceConnectionFilter === 'all' || r.frontendPageId === sourceConnectionFilter || r.backendPageId === sourceConnectionFilter) &&
     (q === '' || r.name.toLowerCase().includes(q.toLowerCase())) &&
     (sectionFilter === 'all' || r.section === sectionFilter) &&
     (statusFilter === 'all' || effectiveStatus(r) === statusFilter) &&
@@ -702,6 +706,10 @@ export default function CatalogPage() {
     (activeDir === 'all' || (r.folderId ?? 'other') === activeDir),
   );
   const filtered = scopedRows.filter(matchesCheckFilter);
+  const sourceConnectionOptions = mockSourceConnectionsData.filter((source) =>
+    (connectFilter === 'all' || source.kind === connectFilter) &&
+    (sectionFilter === 'all' || source.section === sectionFilter),
+  );
 
   const checkCounts = scopedRows.reduce((acc, r) => {
     const status = checkStatusOf(r);
@@ -1407,6 +1415,7 @@ export default function CatalogPage() {
 
   return (
     <div className="space-y-4">
+      <ProfileReturnBanner />
       <PageHeader
         title="知识资产目录"
         desc="全门户全板块的内容管理主战场——上传/新增内容、选择前台页面入库、做知识健康体检都在这里。前台页面会带入路由、导航路径、页面数据类型和结构化字段，让用户提问时能定位到具体页面信息。"
@@ -1537,11 +1546,16 @@ export default function CatalogPage() {
           <Card>
             <CardContent className="pt-4 space-y-3">
               <div className="flex gap-2 flex-wrap">
+                {sourceConnectionFilter !== 'all' && <Button variant="outline" size="sm" onClick={() => { setSourceConnectionFilter('all'); navigate('/knowledge-config/catalog', { replace: true }); }}>当前栏目知识 · 清除来源筛选</Button>}
                 <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 按名称搜索…" className="max-w-xs h-9" />
-                <select value={connectFilter} onChange={(e) => setConnectFilter(e.target.value as 'all' | ConnectType)}
+                <select value={connectFilter} onChange={(e) => { setConnectFilter(e.target.value as 'all' | ConnectType); setSourceConnectionFilter('all'); }}
                   className="h-9 px-2 rounded-md border text-sm bg-white">
                   <option value="all">全部来源方式</option>
                   {CONNECT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select aria-label="应用/数据源" value={sourceConnectionFilter} onChange={(e) => setSourceConnectionFilter(e.target.value)} className="h-9 max-w-64 px-2 rounded-md border text-sm bg-white">
+                  <option value="all">全部应用/数据源</option>
+                  {sourceConnectionOptions.map((source) => <option key={`${source.sourceId}:${source.section}`} value={source.sourceId}>{source.name}</option>)}
                 </select>
                 <select value={knowledgeBaseTypeFilter} onChange={(e) => { setKnowledgeBaseTypeFilter(e.target.value as 'all' | KnowledgeBaseType); setPrimaryCategoryFilter('all'); setSecondaryCategoryFilter('all'); }} className="h-9 px-2 rounded-md border text-sm bg-white">
                   <option value="all">全部知识库类型</option>
@@ -1688,6 +1702,8 @@ export default function CatalogPage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         <button className="hover:text-blue-600 text-left" onClick={() => navigate(r.id)}>{r.name}</button>
+                        {r.section === 'structured' && <div className="mt-1 text-xs text-gray-500">{r.structuredRecords ? `${r.structuredRecords.length} 条记录` : '待处理'} · {r.structuredFields?.length || 0} 个字段 · {r.connect === '上传文件' ? '文件导入' : '平台关联'}</div>}
+                        {(r.frontendPageId || r.backendPageId) && <div className="mt-1 max-w-64 truncate text-xs text-gray-400" title={mockSourceConnectionsData.find((source) => source.sourceId === (r.frontendPageId || r.backendPageId) && source.section === r.section)?.name || r.sourceRef}>来源：{mockSourceConnectionsData.find((source) => source.sourceId === (r.frontendPageId || r.backendPageId) && source.section === r.section)?.name || r.sourceRef}</div>}
                       </TableCell>
                       <TableCell><Badge className={`text-xs font-normal ${lifecycleConfig.cls}`}>{lifecycleConfig.label}</Badge></TableCell>
                       <TableCell><SectionTag k={r.section} /></TableCell>

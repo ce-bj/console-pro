@@ -1,3 +1,4 @@
+import StructuredRetrievalConfig from './StructuredRetrievalConfig';
 // 板块配置 — 切片解析方式（参考 RAGFlow） + 入库前清洗与质量评估策略 + 检索策略
 // 日常"传内容"去「知识资产目录」，这里只负责怎么处理、跑得好不好、要不要关注
 import { useState, useEffect, ReactNode } from 'react';
@@ -19,7 +20,6 @@ import {
   metaChunkingEligible, doc2queryEligible, embeddingEligible,
   MetadataFieldDef, META_FIELD_TYPES, BUILTIN_METADATA_FIELDS,
   ChunkRule, generalChunkRule, mockExtraChunkRules, CONTENT_FORMATS,
-  McpAction, mockMcpActions,
 } from './data';
 
 const mockSectionChunkRuleDefaultsData = [
@@ -77,8 +77,6 @@ export default function SectionDetailPage() {
   const [addRuleOpen, setAddRuleOpen] = useState(false);
   const [newRuleFormat, setNewRuleFormat] = useState('');
 
-  // ⑤结构化数据：MCP 动作勾选
-  const [mcpActions, setMcpActions] = useState<McpAction[]>(() => mockMcpActions.map((a) => ({ ...a })));
 
   // 元数据生成设置弹窗（参考 RAGFlow：字段/描述/类型/值/操作）
   const [metaOpen, setMetaOpen] = useState(false);
@@ -137,13 +135,10 @@ export default function SectionDetailPage() {
     setCfg({ ...cfgNow, chunkRules: cfgNow.chunkRules.filter((_, i) => i !== index) });
     setActiveRuleIdx((p) => (p >= index ? Math.max(0, p - 1) : p));
   }
-  function toggleMcpAction(id: string) {
-    // ACTION: 启停结构化数据 MCP 动作 [PATCH] /api/kb/sections/structured/mcp-actions/{id}
-    setMcpActions((p) => p.map((a) => (a.id === id ? { ...a, enabled: !a.enabled } : a)));
-  }
 
   function saveCfg() {
     // ACTION: 保存板块配置（解析/清洗/检索） [PUT] /api/kb/sections/{key}/config
+    if (isStructured) Object.assign(s!, { privacyMaskEnabled: cfgNow.privacyMaskEnabled, privacyMaskTypes: [...cfgNow.privacyMaskTypes], dedupEnabled: cfgNow.dedupEnabled, dedupStrategy: cfgNow.dedupStrategy, qualityScoreThreshold: cfgNow.qualityScoreThreshold });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
@@ -168,6 +163,74 @@ export default function SectionDetailPage() {
     setMetaOpen(false);
   };
 
+  const cleaningCard = (<Card>
+            <CardHeader className="pb-2"><CardTitle className="text-sm">入库前清洗与质量评估策略</CardTitle></CardHeader>
+            <CardContent className="space-y-2.5">
+              <div className="p-2.5 rounded border bg-gray-50 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="text-sm text-gray-700">隐私信息脱敏</div>
+                    <div className="text-xs text-gray-400">
+                      入库前识别内容中的隐私信息，命中后替换为占位符再入库，原文不落库、不进入向量索引
+                    </div>
+                  </div>
+                  <Switch checked={cfg.privacyMaskEnabled} onCheckedChange={(v) => setCfg({ ...cfg, privacyMaskEnabled: v })} />
+                </div>
+                {cfg.privacyMaskEnabled && (
+                  <div className="pt-2 border-t space-y-2">
+                    <div className="text-xs text-gray-500">去隐私策略 — 选择需要识别并脱敏的信息类型</div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                      {PRIVACY_MASK_TYPES.map((t) => (
+                        <label key={t} className="flex items-center gap-1.5 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            className="accent-blue-600"
+                            checked={cfg.privacyMaskTypes.includes(t)}
+                            onChange={() => setCfg({
+                              ...cfg,
+                              privacyMaskTypes: cfg.privacyMaskTypes.includes(t)
+                                ? cfg.privacyMaskTypes.filter((x) => x !== t)
+                                : [...cfg.privacyMaskTypes, t],
+                            })}
+                          />
+                          {t}
+                        </label>
+                      ))}
+                    </div>
+                    <div className="text-xs text-gray-400 pt-1.5 border-t">
+                      示例：原文"联系电话 13812345678，负责人张三" → 入库后 "联系电话 {'{手机号}'}，负责人 {'{姓名}'}"
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between p-2.5 rounded border bg-gray-50">
+                <div className="flex-1">
+                  <div className="text-sm text-gray-700">去重</div>
+                  <div className="text-xs text-gray-400">{isStructured ? '按来源记录标识去重；无标识时比较整行内容，不合并不同规格。' : '按标题分词 + 标签重合度比对同板块内容，相似度 ≥60% 视为疑似重复'}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <select value={cfg.dedupStrategy} disabled={!cfg.dedupEnabled}
+                    onChange={(e) => setCfg({ ...cfg, dedupStrategy: e.target.value })}
+                    className="h-8 px-2 rounded-md border text-xs bg-white disabled:bg-gray-100 disabled:text-gray-400">
+                    {(isStructured ? ['按来源记录标识', '按整行内容指纹'] : DEDUP_STRATEGIES).map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                  <Switch checked={cfg.dedupEnabled} onCheckedChange={(v) => setCfg({ ...cfg, dedupEnabled: v })} />
+                </div>
+              </div>
+              <div className="p-2.5 rounded border bg-gray-50">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div>
+                    <div className="text-sm text-gray-700">打分策略 — 质量评分拦截阈值</div>
+                    <div className="text-xs text-gray-400">{isStructured ? '检查记录完整性、字段类型、重复及关联关系，低于阈值的记录不参与检索。' : '质量打分 = 100 − 敏感词命中扣分(40) − 疑似重复扣分(20) − 切片解析问题占比扣分(最多30)；低于阈值时入库前门禁检查不通过'}</div>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-700">{cfg.qualityScoreThreshold}</span>
+                </div>
+                <input type="range" min={0} max={100} value={cfg.qualityScoreThreshold}
+                  onChange={(e) => setCfg({ ...cfg, qualityScoreThreshold: +e.target.value })} className="w-full" />
+              </div>
+            </CardContent>
+          </Card>);
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-2 text-sm text-gray-400">
@@ -188,69 +251,10 @@ export default function SectionDetailPage() {
 
       {isStructured ? (
         <>
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">这类知识怎么用</CardTitle></CardHeader>
-            <CardContent>
-              <p className="text-sm text-gray-500">结构化数据不进向量库、不分块，通过 MCP 参数化查询数据库实时返回，无需配置解析/清洗/检索参数。</p>
-              <div className="grid grid-cols-2 gap-4 mt-3">
-                <div className="p-3 rounded-lg border bg-gray-50">
-                  <div className="text-xs text-gray-400">怎么处理</div>
-                  <div className="text-sm text-gray-700 mt-1">{howto.handle}</div>
-                </div>
-                <div className="p-3 rounded-lg border bg-gray-50">
-                  <div className="text-xs text-gray-400">怎么检索</div>
-                  <div className="text-sm text-gray-700 mt-1">{howto.retrieve}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <StructuredRetrievalConfig />
+          {cleaningCard}
+          <div className="flex items-center gap-3"><Button onClick={saveCfg}>保存清洗配置</Button>{saved && <span role="status" className="text-sm text-green-600">清洗配置已保存</span>}</div>
 
-          {/* MCP 动作：结构化数据不做切片，改为勾选开放哪些实时查询动作 */}
-          <Card>
-            <CardHeader className="pb-2 flex-row items-start justify-between">
-              <div>
-                <CardTitle className="text-sm">MCP 动作</CardTitle>
-                <p className="mt-0.5 text-xs text-gray-500">
-                  每个动作对应一次业务库的参数化查询。勾选后该动作对智能客服开放，用户提问命中时实时取数作答；表映射与查询语句由平台在接入时配置，运营侧只决定开不开。
-                </p>
-              </div>
-              <Badge className="shrink-0 bg-blue-50 text-blue-600 text-xs">
-                已启用 {mcpActions.filter((a) => a.enabled).length}/{mcpActions.length}
-              </Badge>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-14">启用</TableHead>
-                    <TableHead>动作</TableHead>
-                    <TableHead>数据来源</TableHead>
-                    <TableHead>主要入参</TableHead>
-                    <TableHead>返回内容</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {mcpActions.map((a) => (
-                    <TableRow key={a.id} className={a.enabled ? '' : 'opacity-60'}>
-                      <TableCell>
-                        <Switch checked={a.enabled} onCheckedChange={() => toggleMcpAction(a.id)} />
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm text-gray-800">{a.name}</div>
-                        <div className="mt-0.5 text-xs text-gray-400">{a.desc}</div>
-                      </TableCell>
-                      <TableCell className="text-xs text-gray-500 font-mono">{a.source}</TableCell>
-                      <TableCell className="text-xs text-gray-500 font-mono">{a.params}</TableCell>
-                      <TableCell className="text-xs text-gray-500">{a.returns}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-              <p className="mt-2 text-[11px] text-gray-400">
-                关闭某个动作后，智能客服不再调用它；已产生的对话记录保留。新增动作需平台侧先完成数据库接入，再在此列表出现。
-              </p>
-            </CardContent>
-          </Card>
         </>
       ) : (
         <>
@@ -366,74 +370,7 @@ export default function SectionDetailPage() {
             </CardContent>
           </Card>
 
-          {/* ② 入库前清洗与质量评估策略 */}
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">入库前清洗与质量评估策略</CardTitle></CardHeader>
-            <CardContent className="space-y-2.5">
-              <div className="p-2.5 rounded border bg-gray-50 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="text-sm text-gray-700">隐私信息脱敏</div>
-                    <div className="text-xs text-gray-400">
-                      入库前识别内容中的隐私信息，命中后替换为占位符再入库，原文不落库、不进入向量索引
-                    </div>
-                  </div>
-                  <Switch checked={cfg.privacyMaskEnabled} onCheckedChange={(v) => setCfg({ ...cfg, privacyMaskEnabled: v })} />
-                </div>
-                {cfg.privacyMaskEnabled && (
-                  <div className="pt-2 border-t space-y-2">
-                    <div className="text-xs text-gray-500">去隐私策略 — 选择需要识别并脱敏的信息类型</div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-                      {PRIVACY_MASK_TYPES.map((t) => (
-                        <label key={t} className="flex items-center gap-1.5 text-sm text-gray-700">
-                          <input
-                            type="checkbox"
-                            className="accent-blue-600"
-                            checked={cfg.privacyMaskTypes.includes(t)}
-                            onChange={() => setCfg({
-                              ...cfg,
-                              privacyMaskTypes: cfg.privacyMaskTypes.includes(t)
-                                ? cfg.privacyMaskTypes.filter((x) => x !== t)
-                                : [...cfg.privacyMaskTypes, t],
-                            })}
-                          />
-                          {t}
-                        </label>
-                      ))}
-                    </div>
-                    <div className="text-xs text-gray-400 pt-1.5 border-t">
-                      示例：原文"联系电话 13812345678，负责人张三" → 入库后 "联系电话 {'{手机号}'}，负责人 {'{姓名}'}"
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center justify-between p-2.5 rounded border bg-gray-50">
-                <div className="flex-1">
-                  <div className="text-sm text-gray-700">去重</div>
-                  <div className="text-xs text-gray-400">按标题分词 + 标签重合度比对同板块内容，相似度 ≥60% 视为疑似重复</div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <select value={cfg.dedupStrategy} disabled={!cfg.dedupEnabled}
-                    onChange={(e) => setCfg({ ...cfg, dedupStrategy: e.target.value })}
-                    className="h-8 px-2 rounded-md border text-xs bg-white disabled:bg-gray-100 disabled:text-gray-400">
-                    {DEDUP_STRATEGIES.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                  <Switch checked={cfg.dedupEnabled} onCheckedChange={(v) => setCfg({ ...cfg, dedupEnabled: v })} />
-                </div>
-              </div>
-              <div className="p-2.5 rounded border bg-gray-50">
-                <div className="flex items-center justify-between mb-1.5">
-                  <div>
-                    <div className="text-sm text-gray-700">打分策略 — 质量评分拦截阈值</div>
-                    <div className="text-xs text-gray-400">质量打分 = 100 − 敏感词命中扣分(40) − 疑似重复扣分(20) − 切片解析问题占比扣分(最多30)；低于阈值时「入库前门禁检查」的"质量打分是否达标"项不通过</div>
-                  </div>
-                  <span className="text-sm font-semibold text-gray-700">{cfg.qualityScoreThreshold}</span>
-                </div>
-                <input type="range" min={0} max={100} value={cfg.qualityScoreThreshold}
-                  onChange={(e) => setCfg({ ...cfg, qualityScoreThreshold: +e.target.value })} className="w-full" />
-              </div>
-            </CardContent>
-          </Card>
+          {cleaningCard}
 
           {/* ③ 检索策略 */}
           <Card>

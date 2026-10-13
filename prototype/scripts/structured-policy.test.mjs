@@ -1,0 +1,20 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+
+const code = ts.transpileModule(readFileSync(new URL('../src/pages/knowledge-config/structuredPolicy.ts', import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+const policy = await import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+assert.equal(typeof policy.resolveFieldCapabilities, 'function', '需要统一的平台默认能力解析');
+const text = policy.resolveFieldCapabilities('文本');
+assert.equal(text.search, true);
+assert.equal(text.facet, false);
+assert.equal(policy.resolveFieldCapabilities('数值').sort, true);
+assert.equal(policy.resolveFieldCapabilities('图片').ai, false);
+assert.equal(policy.resolveFieldCapabilities('未知类型').search, false);
+assert.equal(policy.resolveFieldCapabilities('文本', { search: false }).search, false);
+assert.equal(policy.resolveFieldCapabilities('图片', { search: true }).search, false, '不允许覆盖不支持的能力');
+const numberPolicy = policy.mockFieldPoliciesData.find(p => p.type === '数值');
+numberPolicy.defaults.facet = true;
+assert.equal(policy.resolveFieldCapabilities('数值').facet, true, '新字段读取已保存的平台默认值');
+assert.equal(policy.resolveFieldCapabilities('数值', { facet: false }).facet, false, '用户覆盖优先');
+console.log('结构化字段默认值、能力限制、用户覆盖：通过');

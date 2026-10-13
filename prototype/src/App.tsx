@@ -8,10 +8,11 @@ import SectionsPage from './pages/knowledge-config/SectionsPage'
 import SectionDetailPage from './pages/knowledge-config/SectionDetailPage'
 import CatalogPage from './pages/knowledge-config/CatalogPage'
 import KnowledgeCreatePage from './pages/knowledge-config/KnowledgeCreatePage'
+import StructuredSourcePreview from './pages/knowledge-config/StructuredSourcePreview'
 import AssetDetailPage from './pages/knowledge-config/AssetDetailPage'
 import MetadataPage from './pages/knowledge-config/MetadataPage'
 import RetrievalPage from './pages/knowledge-config/RetrievalPage'
-import SyncPage from './pages/knowledge-config/SyncPage'
+import SyncPage from './pages/knowledge-config/ConnectionUpdatesPage'
 import QualityPage from './pages/knowledge-config/QualityPage'
 import Customer360Page from './pages/N6-Customer360Page'
 import LeadPoolPage from './pages/N7-LeadPoolPage'
@@ -138,6 +139,7 @@ export default function App() {
               <Route path="sections/:sectionKey" element={<SectionDetailPage />} />
               <Route path="catalog" element={<CatalogPage />} />
               <Route path="catalog/new" element={<KnowledgeCreatePage />} />
+              <Route path="source-preview/:sourceId" element={<StructuredSourcePreview />} />
               <Route path="catalog/:assetId" element={<AssetDetailPage />} />
               <Route path="metadata" element={<MetadataPage />} />
               <Route path="retrieval" element={<RetrievalPage />} />

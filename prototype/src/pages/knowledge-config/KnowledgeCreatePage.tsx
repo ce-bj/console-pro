@@ -1,16 +1,22 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import ProfileReturnBanner from './ProfileReturnBanner';
+import { registerProfileSupplement } from './websiteProfile';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
+import StructuredIntake, { initialStructuredDraft } from './StructuredIntake';
+import { mockStructuredSourcesData } from './structuredSources';
+import { handleRegisterSource, mockSourceConnectionsData } from './sourceConnections';
 import {
   AUDIENCE_OPTIONS, CONTENT_FORMATS, FrontendPageItem, KbAsset, KnowledgeBaseType,
   LANGUAGE_OPTIONS, PRIMARY_CATEGORIES, SectionKey, SECTIONS,
   VALIDITY_STATUSES, mockAssets, mockBackendPageSources, mockFrontendSiteTree,
   mockIndustryLibrary, secondaryCategoriesOf, upsertKnowledgeAssets, PRIMARY_INDUSTRIES,
-  mockEnterpriseIndustryConfig, enterpriseIndustryList, industryLabel,
+  mockEnterpriseIndustryConfig, enterpriseIndustryList, industryLabel, mockPortalSites,
   generalChunkRule, mockExtraChunkRules, secondaryIndustriesOf,
 } from './data';
 
@@ -30,14 +36,14 @@ const ACTIONS: Array<{ key: CreateAction; icon: string; title: string; desc: str
 ];
 
 const BOARD_RULES: Record<CreateAction, SectionKey[]> = {
-  file: ['document', 'faq', 'structured', 'web'], faq: ['faq'], url: ['web', 'document'],
-  frontend: ['content', 'structured'], backend: ['content', 'structured'], platform: ['industry'],
+  file: ['document', 'faq', 'structured'], faq: ['faq'], url: ['web', 'document'],
+  frontend: ['content'], backend: ['content', 'structured'], platform: ['industry'],
 };
 
 const BOARD_CAPABILITIES: Record<SectionKey, string> = {
   document: '沉淀说明书、制度、报告等完整文档，供智能体检索并引用文档内容。',
   faq: '批量沉淀标准问题、答案和相似问法，供智能客服精准召回统一答案。',
-  structured: '接入业务字段并上传结构化问答，供智能体按字段精准查询业务信息。',
+  structured: '上传表格或接入应用数据及产品规格，供智能体按字段查询、筛选和比较记录。',
   content: '学习网站前台与后台页面内容，供智能体检索、引用并定位来源页面。',
   web: '学习外部网站的公开页面内容，供智能体检索并引用网络资料。',
   industry: '导入平台统一维护的行业资料，供智能体按行业分类检索专业内容。',
@@ -73,16 +79,17 @@ export default function KnowledgeCreatePage() {
   const location = useLocation();
   const [params] = useSearchParams();
   const platformEntry = location.pathname.startsWith('/platform/industry-knowledge/new');
+  const profileSite = !platformEntry && params.get('from') === 'website-profile' ? mockPortalSites.find(site => site.id === params.get('profileSite')) : undefined;
   const initial = (platformEntry ? 'file' : params.get('action')) as CreateAction | null;
   const [action, setAction] = useState<CreateAction | null>(ACTIONS.some((a) => a.key === initial) ? initial : null);
-  const [board, setBoard] = useState<SectionKey | null>(platformEntry ? 'industry' : initial ? BOARD_RULES[initial]?.[0] || null : null);
+  const [board, setBoard] = useState<SectionKey | null>(platformEntry ? 'industry' : initial && BOARD_RULES[initial]?.includes(params.get('board') as SectionKey) ? params.get('board') as SectionKey : initial ? BOARD_RULES[initial]?.[0] || null : null);
   const [metadata, setMetadata] = useState<MetadataDraft>(() => platformEntry ? { ...emptyMetadata(), knowledgeBaseType: '行业知识库', contentFormat: '报告', audience: '企业内部', validityStatus: '现行有效', language: '简体中文' } : emptyMetadata());
   const [selectedChunkRule, setSelectedChunkRule] = useState('通用');
   const [files, setFiles] = useState<File[]>([]);
   const [fileMode, setFileMode] = useState<'local' | 'object'>('local');
   const [objectName, setObjectName] = useState('');
   const [objectPath, setObjectPath] = useState('');
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(profileSite && params.get('profileLabel') ? `请介绍${params.get('profileLabel')}` : '');
   const [answer, setAnswer] = useState('');
   const [alternativeQuestions, setAlternativeQuestions] = useState('');
   const [urlText, setUrlText] = useState('');
@@ -90,6 +97,8 @@ export default function KnowledgeCreatePage() {
   const [pickedFrontend, setPickedFrontend] = useState<Set<string>>(new Set());
   const [pickedBackend, setPickedBackend] = useState<Set<string>>(new Set());
   const [pickedPlatform, setPickedPlatform] = useState<Set<string>>(new Set());
+  const [sourceLearningEnabled, setSourceLearningEnabled] = useState(true);
+  const [structuredDraft, setStructuredDraft] = useState(initialStructuredDraft);
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<Set<string>>(new Set(['site_cn', 'app:采购招标', 'app:云资讯']));
   const [message, setMessage] = useState('');
@@ -103,7 +112,7 @@ export default function KnowledgeCreatePage() {
   const togglePicked = (setter: React.Dispatch<React.SetStateAction<Set<string>>>, id: string) => setter((old) => { const next = new Set(old); next.has(id) ? next.delete(id) : next.add(id); return next; });
 
   const frontSites = useMemo(() => {
-    const allowed = mockFrontendPageSourcesData.map((group) => ({ ...group, pages: group.pages.filter((p) => (p.board === 'content' || p.board === 'structured') && (!search || `${p.siteName}${p.navPath.join('')}${p.title}${p.route}`.toLowerCase().includes(search.toLowerCase()))) })).filter((g) => g.pages.length);
+    const allowed = mockFrontendPageSourcesData.map((group) => ({ ...group, pages: group.pages.filter((p) => p.board === 'content' && (!search || `${p.siteName}${p.navPath.join('')}${p.title}${p.route}`.toLowerCase().includes(search.toLowerCase()))) })).filter((g) => g.pages.length);
     return Array.from(new Set(allowed.map((g) => g.siteId))).map((siteId) => ({ siteId, siteName: allowed.find((g) => g.siteId === siteId)!.siteName, groups: allowed.filter((g) => g.siteId === siteId) }));
   }, [search]);
   const backendGroups = useMemo(() => Array.from(new Set(mockBackendPageSourcesData.map((p) => p.applicationName))).map((name) => ({ name, pages: mockBackendPageSourcesData.filter((p) => p.applicationName === name && (!search || `${p.applicationName}${p.pageName}${p.backendPath}`.toLowerCase().includes(search.toLowerCase()))) })).filter((g) => g.pages.length), [search]);
@@ -122,13 +131,26 @@ export default function KnowledgeCreatePage() {
       contentFormat: (section === 'faq' ? '问答对' : section === 'structured' ? '结构化记录' : metadata.contentFormat === '未指定' ? '其他' : metadata.contentFormat) as KbAsset['contentFormat'],
       validityStatus: (metadata.validityStatus === '未指定' ? '待确认' : metadata.validityStatus) as KbAsset['validityStatus'],
       source: name, audience: metadata.audience === '未指定' ? '企业内部' : metadata.audience, language: metadata.language === '未指定' ? '中文' : metadata.language,
-      portalSites: [], businessTag: '知识问答', scene: '通用', timeliness: section === 'structured' ? '实时' : '静态', access: '内部', status: 'draft', health: 0, chunks: 0,
+      portalSites: profileSite ? [profileSite.id] : [], businessTag: '知识问答', scene: '通用', timeliness: section === 'structured' ? '实时' : '静态', access: '内部', status: 'draft', health: 0, chunks: 0,
       createdAt: now, updatedAt: now, createdBy: '当前用户', tags: [], sourceRef: name,
     };
   };
 
   const makeAssets = (): KbAsset[] => {
     if (!action || !board) return [];
+    if (board === 'structured' && action === 'backend') {
+      return structuredDraft.selections.flatMap(selection => {
+        const source = mockStructuredSourcesData.find(s => s.id === selection.sourceId);
+        if (!source || source.status === 'unavailable' || source.special?.enabledProducts === 0 || mockAssets.some(a => a.section === 'structured' && a.backendPageId === source.id) || mockSourceConnectionsData.some(s => s.section === 'structured' && s.sourceId === source.id)) return [];
+        const name = `${source.application} / ${source.name}`;
+        return [{ ...commonAsset(name, board), structuredFields: source.fields.map(f => f.name), structuredSchema: source.fields, structuredChildSchema: selection.includeChildren ? source.children?.fields : undefined, structuredSelection: { application: source.application, sourceId: source.id, schemaVersion: source.schemaVersion, includeChildren: selection.includeChildren, childName: selection.includeChildren ? source.children?.name : undefined }, sourceDataMode: '结构化字段' as const, source: name, sourceRef: name, backendPageId: source.id, backendPath: source.id }];
+      });
+    }
+    if (board === 'structured' && action === 'file') {
+      if (!(fileMode === 'local' ? files.length : objectName)) return [];
+      const uploadName = fileMode === 'local' ? files[0]?.name : objectName;
+      return [{ ...commonAsset(uploadName!, board), sourceDataMode: '结构化字段', source: uploadName!, sourceRef: fileMode === 'local' ? uploadName! : objectPath, timeliness: '静态' }];
+    }
     if (action === 'file') {
       const names = fileMode === 'local' ? files.map((f) => f.name) : objectName ? [objectName] : [];
       return names.map((name) => ({ ...commonAsset(name, board), sourceRef: fileMode === 'local' ? name : objectPath || name, fileSize: fileMode === 'local' ? `${Math.max(0.1, (files.find((f) => f.name === name)?.size || 0) / 1024 / 1024).toFixed(1)} MB` : undefined }));
@@ -152,21 +174,29 @@ export default function KnowledgeCreatePage() {
     const assets = makeAssets();
     if (!action) return setMessage('请先选择要做什么。');
     if (!board) return setMessage('请先选择知识板块。');
+    if (board === 'structured' && action === 'file' && fileMode === 'local' && (files.length !== 1 || files.some(f => !/\.(xlsx?|csv|jsonl?)$/i.test(f.name) || !f.size || f.size > 100 * 1024 * 1024))) return setMessage('结构化数据每次上传一个非空文件，支持 Excel、CSV、JSON、JSONL，最大 100 MB。');
+    if (board === 'structured' && action === 'backend' && !structuredDraft.selections.length) return setMessage('请选择至少一个应用数据源。');
     if (action === 'platform' && !mockEnterpriseIndustryConfig.main) return setMessage('请先在知识资产目录选择企业所属行业。');
     if (action !== 'platform' && metadata.industry === '请选择') return setMessage('请选择所属行业。');
     if (platformEntry && secondaryIndustriesOf(metadata.industry).length > 0 && metadata.secondaryIndustry === '请选择') return setMessage('请选择二级行业。');
     if (!platformEntry && action !== 'platform' && metadata.knowledgeBaseType === '请选择') return setMessage('请选择知识库类型。');
     if (!assets.length) return setMessage('请完成当前来源要求的内容选择或填写。');
     if (platformEntry) handleCreatePlatformIndustryKnowledgeDrafts({ assets, chunkRule: selectedChunkRule });
-    else handleCreateKnowledgeDrafts(assets);
-    if (!continueCreate) return navigate(platformEntry ? '/platform/industry-knowledge' : '/knowledge-config/catalog?status=draft');
+    else {
+      handleCreateKnowledgeDrafts(assets);
+      if (profileSite && params.get('profileField')) registerProfileSupplement(profileSite.id, params.get('profileField')!, assets.map(asset => asset.id));
+      if (action === 'frontend' || action === 'backend') assets.forEach((asset) => handleRegisterSource(asset, asset.backendPageId ? (board === 'structured' ? mockStructuredSourcesData.find(p => p.id === asset.backendPageId)?.count : mockBackendPageSources.find(p => p.id === asset.backendPageId)?.contentCount) ?? 0 : 1, { enabled: sourceLearningEnabled }));
+    }
+    if (!continueCreate) return navigate(platformEntry ? '/platform/industry-knowledge' : `/knowledge-config/catalog?status=draft${params.get('returnTo')?.startsWith('/knowledge-config?profileSite=') ? `&returnTo=${encodeURIComponent(params.get('returnTo')!)}` : ''}`);
+    setStructuredDraft(initialStructuredDraft());
     setFiles([]); setObjectName(''); setObjectPath(''); setQuestion(''); setAnswer(''); setAlternativeQuestions(''); setUrlText(''); setPickedFrontend(new Set()); setPickedBackend(new Set()); setPickedPlatform(new Set()); setMessage(`已保存 ${assets.length} 条草稿，可继续创建。`);
   };
 
   const boardInfo = board ? SECTIONS.find((s) => s.key === board) : undefined;
-  const existingFrontend = (p: FrontendPageItem) => mockAssets.some((a) => a.frontendPageId === p.id && a.section === board);
+  const existingFrontend = (p: FrontendPageItem) => mockAssets.some((a) => a.frontendPageId === p.id && a.section === board) || mockSourceConnectionsData.some((s) => s.sourceId === p.id && s.section === board);
 
   return <div className="p-6 space-y-5 max-w-6xl mx-auto">
+    <ProfileReturnBanner />
     <div className="flex items-center justify-between"><div><button className="text-sm text-blue-600 mb-2" onClick={() => navigate(platformEntry ? '/platform/industry-knowledge' : '/knowledge-config/catalog')}>{platformEntry ? '← 返回行业知识运营' : '← 返回知识资产目录'}</button><h1 className="text-2xl font-semibold">{platformEntry ? '新增平台行业知识' : '新增知识'}</h1><p className="text-sm text-gray-500 mt-1">{platformEntry ? '复用企业端新增知识的上传、元数据和校验逻辑，平台内容统一归入行业知识。' : '先选择要做什么，再选择知识归入哪个板块。不同来源保留各自的录入规则。'}</p></div><div className="flex gap-2"><Button variant="outline" onClick={() => save(false)}>保存</Button><Button onClick={() => save(true)}>保存并创建</Button></div></div>
 
     <div className="flex items-center gap-2 text-sm"><Badge className={action ? 'bg-blue-600' : ''}>1 选择动作</Badge><span className="text-gray-300">—</span><Badge className={board ? 'bg-blue-600' : 'bg-gray-200 text-gray-600'}>2 选择板块</Badge><span className="text-gray-300">—</span><Badge className={action && board ? 'bg-blue-600' : 'bg-gray-200 text-gray-600'}>3 添加内容</Badge></div>
@@ -177,10 +207,11 @@ export default function KnowledgeCreatePage() {
 
     {action && board && <Card><CardContent className="p-5 space-y-4"><div><h2 className="font-medium">3. 添加内容</h2><p className="text-xs text-gray-500 mt-1">只展示与当前动作、板块兼容的内容和字段。</p></div>
       {action === 'file' && <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-md border p-1"><button className={`px-4 py-1.5 rounded text-sm ${fileMode === 'local' ? 'bg-blue-600 text-white' : ''}`} onClick={() => setFileMode('local')}>本地上传</button><button className={`px-4 py-1.5 rounded text-sm ${fileMode === 'object' ? 'bg-blue-600 text-white' : ''}`} onClick={() => setFileMode('object')}>对象存储</button></div>{board === 'faq' && <div className="flex items-center gap-1 text-sm"><span className="text-gray-500 mr-1">下载模板</span><Button asChild size="sm" variant="ghost"><a href="/templates/问答知识导入模板.xlsx" download>XLSX</a></Button><Button asChild size="sm" variant="ghost"><a href="/templates/问答知识导入模板.csv" download>CSV</a></Button><Button asChild size="sm" variant="ghost"><a href="/templates/问答知识导入模板.json" download>JSON</a></Button><Button asChild size="sm" variant="ghost"><a href="/templates/问答知识导入模板.jsonl" download>JSONL</a></Button></div>}</div>{fileMode === 'local' ? <label className="block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer"><div className="text-3xl">☁️</div><div className="font-medium mt-2">点击选择或拖拽文件到这里</div><div className="text-xs text-gray-500 mt-2">{board === 'structured' ? '支持 CSV、XLSX、JSON、JSONL；单个文件不超过 100 MB' : board === 'faq' ? '支持 XLSX、CSV、JSON、JSONL；单个文件不超过 100 MB' : '支持 PDF、DOC/DOCX、PPT/PPTX、XLS/XLSX；单个文件不超过 100 MB'}</div><input type="file" multiple className="hidden" accept={board === 'structured' ? '.csv,.xlsx,.json,.jsonl' : board === 'faq' ? '.xlsx,.csv,.json,.jsonl' : '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx'} onChange={(e) => setFiles(Array.from(e.target.files || []))} /></label> : <div className="grid grid-cols-2 gap-4"><label className="space-y-1 text-sm"><span>对象名称</span><Input value={objectName} onChange={(e) => setObjectName(e.target.value)} placeholder="例如：product-manual.pdf" /></label><label className="space-y-1 text-sm"><span>对象路径</span><Input value={objectPath} onChange={(e) => setObjectPath(e.target.value)} placeholder="oss://bucket/path/file.pdf" /></label></div>}{board === 'faq' && <div className="text-xs text-gray-500">模板字段：问题（必填）；答案（必填，支持富文本或普通文本）。</div>}{files.length > 0 && <div className="text-sm bg-gray-50 rounded p-3">已选择 {files.length} 个文件：{files.map((f) => f.name).join('、')}</div>}</div>}
+        <div className="flex flex-wrap items-center justify-between gap-3"><div className="inline-flex rounded-md border p-1"><button className={`px-4 py-1.5 rounded text-sm ${fileMode === 'local' ? 'bg-blue-600 text-white' : ''}`} onClick={() => setFileMode('local')}>本地上传</button><button className={`px-4 py-1.5 rounded text-sm ${fileMode === 'object' ? 'bg-blue-600 text-white' : ''}`} onClick={() => setFileMode('object')}>对象存储</button></div>{(board === 'faq' || board === 'structured') && <div className="flex items-center gap-1 text-sm"><span className="text-gray-500 mr-1">下载模板</span>{['xlsx', 'csv', 'json', 'jsonl'].map(format => <Button asChild key={format} size="sm" variant="ghost"><a href={'/templates/' + (board === 'faq' ? '问答知识导入模板' : '结构化数据导入模板') + '.' + format} download>{format.toUpperCase()}</a></Button>)}</div>}</div>{fileMode === 'local' ? <label className="block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer"><div className="text-3xl">☁️</div><div className="font-medium mt-2">点击选择或拖拽文件到这里</div><div className="text-xs text-gray-500 mt-2">{board === 'structured' ? '支持 XLS/XLSX、CSV、JSON、JSONL；单个文件不超过 100 MB' : board === 'faq' ? '支持 XLSX、CSV、JSON、JSONL；单个文件不超过 100 MB' : '支持 PDF、DOC/DOCX、PPT/PPTX、XLS/XLSX；单个文件不超过 100 MB'}</div><input type="file" multiple className="hidden" accept={board === 'structured' ? '.xls,.xlsx,.csv,.json,.jsonl' : board === 'faq' ? '.xlsx,.csv,.json,.jsonl' : '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx'} onChange={(e) => setFiles(Array.from(e.target.files || []))} /></label> : <div className="grid grid-cols-2 gap-4"><label className="space-y-1 text-sm"><span>对象名称</span><Input value={objectName} onChange={(e) => setObjectName(e.target.value)} placeholder="例如：product-manual.pdf" /></label><label className="space-y-1 text-sm"><span>对象路径</span><Input value={objectPath} onChange={(e) => setObjectPath(e.target.value)} placeholder="oss://bucket/path/file.pdf" /></label></div>}{board === 'faq' && <div className="text-xs text-gray-500">模板字段：问题（必填）；答案（必填，支持富文本或普通文本）。</div>}{files.length > 0 && <div className="text-sm bg-gray-50 rounded p-3">已选择 {files.length} 个文件：{files.map((f) => f.name).join('、')}</div>}</div>}
+      {board === 'structured' && (action === 'file' || action === 'backend') && <StructuredIntake mode={action} fileName={fileMode === 'local' ? files[0]?.name : objectName} value={structuredDraft} onChange={setStructuredDraft} />}
       {action === 'faq' && <div className="space-y-4"><label className="space-y-1 text-sm block"><span>标准问题 <b className="text-red-500">*</b></span><Input value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="例如：产品支持多久退换货？" /></label><label className="space-y-1 text-sm block"><span>答案（富文本） <b className="text-red-500">*</b></span><div className="border rounded-t bg-gray-50 px-3 py-2 text-xs text-gray-500">B　I　U　• 列表　🔗 链接</div><Textarea className="rounded-t-none min-h-32" value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder="输入标准答案，可包含列表、链接等富文本内容" /></label><label className="space-y-1 text-sm block"><span>相似问法（选填，每行一个）</span><Textarea value={alternativeQuestions} onChange={(e) => setAlternativeQuestions(e.target.value)} placeholder={'退换货期限是多久？\n买错了可以退吗？'} /></label></div>}
       {action === 'url' && <div className="space-y-4"><label className="space-y-1 text-sm block"><span>网址 <b className="text-red-500">*</b></span><Textarea value={urlText} onChange={(e) => setUrlText(e.target.value)} placeholder={'https://example.com/page-1\nhttps://example.com/page-2'} /><span className="text-xs text-gray-500">每行一个网址，最多 100 条；仅抓取可公开访问的页面。</span></label><label className="space-y-1 text-sm block"><span>来源分组（选填）</span><Input value={urlGroup} onChange={(e) => setUrlGroup(e.target.value)} placeholder="例如：行业协会网站" /></label></div>}
-      {(action === 'frontend' || action === 'backend') && <div className="space-y-3"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索站点、导航、应用或页面" />{action === 'frontend' ? <div className="border rounded-lg divide-y max-h-[440px] overflow-auto">{frontSites.map((site) => <div key={site.siteId}><button className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 font-medium" onClick={() => toggleExpanded(site.siteId)}><span>{expanded.has(site.siteId) ? '▾' : '▸'}</span>🌐 {site.siteName}</button>{expanded.has(site.siteId) && site.groups.map((group) => { const groupKey = `${site.siteId}:${group.navPath.join('/')}`; return <div key={groupKey} className="pl-5"><button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700" onClick={() => toggleExpanded(groupKey)}><span>{expanded.has(groupKey) ? '▾' : '▸'}</span>📁 {group.navPath.join(' / ')}</button>{expanded.has(groupKey) && group.pages.map((p) => { const exists = existingFrontend(p); const disabled = !compatible(p.sourceDataMode, board) || exists; return <label key={p.id} className={`ml-7 flex items-start gap-3 border-l px-4 py-3 text-sm ${disabled ? 'opacity-55' : 'hover:bg-blue-50 cursor-pointer'}`}><input type="checkbox" className="mt-1" checked={pickedFrontend.has(p.id)} disabled={disabled} onChange={() => togglePicked(setPickedFrontend, p.id)} /><div className="flex-1"><div className="font-medium">{p.title} <Badge className="ml-1 bg-white text-gray-600 border">{p.sourceDataMode}</Badge> <Badge className={`ml-1 ${exists ? 'bg-gray-100 text-gray-600' : 'bg-green-50 text-green-700'}`}>{exists ? '已有' : '新增'}</Badge></div><div className="text-xs text-gray-500 mt-1">{p.route} · {p.contentSource}</div>{disabled && <div className="text-xs text-amber-600 mt-1">{exists ? '当前板块已有该页面' : `与${boardInfo?.name}不兼容`}</div>}</div></label>; })}</div>; })}</div>)}{frontSites.length === 0 && <div className="p-8 text-center text-sm text-gray-500">没有匹配的页面</div>}</div> : <div className="border rounded-lg divide-y max-h-[440px] overflow-auto">{backendGroups.map((group) => { const key = `app:${group.name}`; return <div key={key}><button className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 font-medium" onClick={() => toggleExpanded(key)}><span>{expanded.has(key) ? '▾' : '▸'}</span>▦ {group.name}</button>{expanded.has(key) && group.pages.map((p) => { const exists = mockAssets.some((a) => a.backendPageId === p.id); const disabled = !compatible(p.sourceDataMode, board) || exists; return <label key={p.id} className={`flex items-center gap-3 pl-10 pr-4 py-3 text-sm ${disabled ? 'opacity-55' : 'hover:bg-blue-50 cursor-pointer'}`}><input type="checkbox" checked={pickedBackend.has(p.id)} disabled={disabled} onChange={() => togglePicked(setPickedBackend, p.id)} /><div className="flex-1"><div className="font-medium">{p.pageName} <Badge className="ml-1 bg-white text-gray-600 border">{p.sourceDataMode}</Badge> <Badge className={`ml-1 ${exists ? 'bg-gray-100 text-gray-600' : 'bg-green-50 text-green-700'}`}>{exists ? '已有' : '新增'}</Badge></div><div className="text-xs text-gray-500 mt-1">{p.backendPath} · {p.contentCount} 条 · 更新于 {p.updatedAt}</div>{exists && <div className="text-xs text-amber-600 mt-1">当前板块已有该页面</div>}</div></label>; })}</div>; })}</div>}</div>}
+      {board !== 'structured' && (action === 'frontend' || action === 'backend') && <div className="space-y-3"><Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="搜索站点、导航、应用或页面" />{action === 'frontend' ? <div className="border rounded-lg divide-y max-h-[440px] overflow-auto">{frontSites.map((site) => <div key={site.siteId}><button className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 font-medium" onClick={() => toggleExpanded(site.siteId)}><span>{expanded.has(site.siteId) ? '▾' : '▸'}</span>🌐 {site.siteName}</button>{expanded.has(site.siteId) && site.groups.map((group) => { const groupKey = `${site.siteId}:${group.navPath.join('/')}`; return <div key={groupKey} className="pl-5"><button className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700" onClick={() => toggleExpanded(groupKey)}><span>{expanded.has(groupKey) ? '▾' : '▸'}</span>📁 {group.navPath.join(' / ')}</button>{expanded.has(groupKey) && group.pages.map((p) => { const exists = existingFrontend(p); const disabled = !compatible(p.sourceDataMode, board) || exists; return <label key={p.id} className={`ml-7 flex items-start gap-3 border-l px-4 py-3 text-sm ${disabled ? 'opacity-55' : 'hover:bg-blue-50 cursor-pointer'}`}><input type="checkbox" className="mt-1" checked={pickedFrontend.has(p.id)} disabled={disabled} onChange={() => togglePicked(setPickedFrontend, p.id)} /><div className="flex-1"><div className="font-medium">{p.title} <Badge className="ml-1 bg-white text-gray-600 border">内容资产</Badge> <Badge className={`ml-1 ${exists ? 'bg-gray-100 text-gray-600' : 'bg-green-50 text-green-700'}`}>{exists ? '已有' : '新增'}</Badge></div><div className="text-xs text-gray-500 mt-1">{p.route} · {p.contentSource}</div>{disabled && <div className="text-xs text-amber-600 mt-1">{exists ? '当前板块已有该页面' : `与${boardInfo?.name}不兼容`}</div>}</div></label>; })}</div>; })}</div>)}{frontSites.length === 0 && <div className="p-8 text-center text-sm text-gray-500">没有匹配的页面</div>}</div> : <div className="border rounded-lg divide-y max-h-[440px] overflow-auto">{backendGroups.map((group) => { const key = `app:${group.name}`; return <div key={key}><button className="w-full flex items-center gap-2 px-4 py-3 bg-gray-50 font-medium" onClick={() => toggleExpanded(key)}><span>{expanded.has(key) ? '▾' : '▸'}</span>▦ {group.name}</button>{expanded.has(key) && group.pages.map((p) => { const exists = mockAssets.some((a) => a.backendPageId === p.id && a.section === board) || mockSourceConnectionsData.some((s) => s.sourceId === p.id && s.section === board); const disabled = !compatible(p.sourceDataMode, board) || exists; return <label key={p.id} className={`flex items-center gap-3 pl-10 pr-4 py-3 text-sm ${disabled ? 'opacity-55' : 'hover:bg-blue-50 cursor-pointer'}`}><input type="checkbox" checked={pickedBackend.has(p.id)} disabled={disabled} onChange={() => togglePicked(setPickedBackend, p.id)} /><div className="flex-1"><div className="font-medium">{p.pageName} <Badge className="ml-1 bg-white text-gray-600 border">{p.sourceDataMode}</Badge> <Badge className={`ml-1 ${exists ? 'bg-gray-100 text-gray-600' : 'bg-green-50 text-green-700'}`}>{exists ? '已有' : '新增'}</Badge></div><div className="text-xs text-gray-500 mt-1">{p.backendPath} · {p.contentCount} 条 · 更新于 {p.updatedAt}</div>{exists && <div className="text-xs text-amber-600 mt-1">当前板块已有该页面</div>}</div></label>; })}</div>; })}</div>}</div>}
       {action === 'platform' && (!mockEnterpriseIndustryConfig.main ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center">
           <div className="text-2xl">⚠️</div>
@@ -216,5 +247,6 @@ export default function KnowledgeCreatePage() {
     {platformEntry && action && board && <Card><CardContent className="p-5"><div className="flex items-start justify-between"><div><h2 className="font-medium">切片形式</h2><p className="mt-1 text-xs text-gray-500">这里只选择行业知识板块已经配置好的切片形式；解析器、块大小、清洗、质量和检索参数继续使用该规则的配置。</p></div><Badge className="bg-blue-50 text-blue-700">继承行业知识配置</Badge></div><div className="mt-4 grid grid-cols-3 gap-3">{industryChunkRules.map((rule) => <button key={rule.contentFormat} onClick={() => setSelectedChunkRule(rule.contentFormat)} className={`rounded-lg border p-3 text-left ${selectedChunkRule === rule.contentFormat ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}><div className="font-medium">{rule.contentFormat === '通用' ? '通用切片' : `${rule.contentFormat}切片`}</div><div className="mt-1 text-xs text-gray-500">{rule.chunkMethod} · {rule.chunkTokenSize} tokens</div><div className="mt-1 text-xs text-gray-400">{rule.pdfParser} · 自动关键词 {rule.autoKeywordCount}</div></button>)}</div></CardContent></Card>}
 
     {message && <div className={`rounded-md px-4 py-3 text-sm ${message.startsWith('已保存') ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{message}</div>}
+    {(action === 'frontend' || action === 'backend') && <div className="flex flex-wrap items-center justify-between gap-4 rounded border bg-white p-4 text-sm"><div className="flex items-center gap-3"><Switch aria-label="学习启用" checked={sourceLearningEnabled} onCheckedChange={setSourceLearningEnabled} /><div><div className="font-medium">学习启用</div><div className="mt-1 text-xs text-gray-500">开启后，保存即创建并启用应用/数据源的学习关系。</div></div></div><Button variant="outline" onClick={() => navigate('/knowledge-config/sync')}>管理已有接入</Button></div>}
   </div>;
 }

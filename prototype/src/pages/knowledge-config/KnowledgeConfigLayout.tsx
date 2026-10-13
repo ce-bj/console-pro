@@ -19,7 +19,7 @@ const subNav: { group: string; items: { to: string; label: string; emoji: string
   {
     group: '数据接入',
     items: [
-      { to: 'sync', label: '同步状态', emoji: '🔄' },
+      { to: 'sync', label: '接入与更新', emoji: '🔄' },
     ],
   },
   {

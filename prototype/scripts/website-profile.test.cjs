@@ -1,0 +1,34 @@
+const { readFileSync } = require('node:fs');
+const ts = require('typescript');
+const assert = require('node:assert/strict');
+const source = readFileSync('src/pages/knowledge-config/websiteProfile.ts', 'utf8');
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+const mod = { exports: {} }; new Function('exports', 'module', compiled)(mod.exports, mod);
+const { regenerateFields } = mod.exports;
+const fields = [{ id: 'a', value: '人工内容', sourceValue: '来源更新', manual: true }, { id: 'b', value: '旧内容', sourceValue: '新内容', manual: false }, { id: 'c', value: '', sourceValue: '', manual: false }];
+const result = regenerateFields(fields);
+assert.equal(result[0].value, '人工内容');
+assert.equal(result[0].suggestion, '来源更新');
+assert.equal(result[1].value, '新内容');
+assert.equal(result[2].value, '');
+assert.equal(fields[1].value, '旧内容');
+assert.equal(regenerateFields(fields, 'b')[0].suggestion, undefined);
+console.log('PASS: 人工保护、建议、来源更新、缺失不编造、不修改输入、单字段生成');
+const cache = {};
+function load(name) {
+  if (cache[name]) return cache[name];
+  const code = ts.transpileModule(readFileSync(`src/pages/knowledge-config/${name}.ts`, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
+  const module = { exports: {} };
+  new Function('exports', 'module', 'require', code)(module.exports, module, path => load(path.replace('./', '')));
+  cache[name] = module.exports;
+  return module.exports;
+}
+const { resolveProfileEvidence, knowledgeMaintenance } = load('profileKnowledge');
+assert.equal(resolveProfileEvidence({ assetId: 'structured-platform', recordIndex: 0, fields: ['name'] }, 'site_cn').eligible, true);
+assert.equal(resolveProfileEvidence({ assetId: 'structured-excel', recordIndex: 1 }, 'site_cn').eligible, false);
+assert.equal(resolveProfileEvidence({ assetId: 'k1', chunkId: 'k1c4' }, 'site_cn').eligible, false);
+assert.equal(resolveProfileEvidence({ assetId: 'k1', chunkId: 'k1c1' }, 'site_fr'), null);
+assert.equal(resolveProfileEvidence({ assetId: 'missing' }, 'site_cn'), null);
+assert.match(knowledgeMaintenance({ connect: '后台页面', section: 'structured' }), /数据源/);
+assert.match(knowledgeMaintenance({ connect: '上传文件', section: 'structured' }), /源|文件/);
+console.log('PASS: 结构化记录、停用行、无效切片、门户隔离、删除依据及维护分流');

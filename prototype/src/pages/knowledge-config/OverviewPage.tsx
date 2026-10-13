@@ -6,6 +6,7 @@ import {
   SECTIONS, KB_TOTALS, mockAssets, mockBlindSpots, healthCls,
 } from './data';
 import { KpiCard } from './shared';
+import WebsiteKnowledgeProfile from './WebsiteKnowledgeProfile';
 
 export default function OverviewPage() {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ export default function OverviewPage() {
   const todos = [
     { label: '草稿，待发布上线', count: drafts, cls: 'text-amber-600', to: 'catalog', cta: '去处理' },
     { label: '低质知识（健康度<60），建议整改', count: warnings, cls: 'text-red-500', to: 'quality', cta: '去查看' },
-    { label: '内容过期 / 待更新', count: stale, cls: 'text-orange-600', to: 'sync', cta: '去同步' },
+    { label: '内容过期 / 待更新', count: stale, cls: 'text-orange-600', to: 'sync?tab=updates', cta: '去维护' },
     { label: '用户问了但答不上（覆盖盲区）', count: mockBlindSpots.length, cls: 'text-blue-600', to: 'quality', cta: '去补录' },
   ].filter((t) => t.count > 0);
 
@@ -31,6 +32,8 @@ export default function OverviewPage() {
         <KpiCard label="待处理" value={drafts + stale + warnings} sub="草稿/过期/低质合计" cls="text-amber-600" />
         <KpiCard label="平均健康度" value={KB_TOTALS.avgHealth} sub="满分100，越高越好" cls="text-blue-600" />
       </div>
+
+      <WebsiteKnowledgeProfile />
 
       <div className="grid grid-cols-3 gap-4">
         {/* 需要处理 */}

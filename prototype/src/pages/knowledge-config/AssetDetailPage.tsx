@@ -19,6 +19,10 @@ import {
 } from './data';
 import { SectionTag, StatusActions, HealthValue, MetricBar } from './shared';
 import { mockPlatformIndustryKnowledgeData, PlatformIndustryKnowledge } from '../N14-IndustryKnowledgePlatformPage';
+import StructuredRecords from './StructuredRecords';
+import ChipAdder from './ChipAdder';
+import ProfileReturnBanner from './ProfileReturnBanner';
+import { mockStructuredPolicyData } from './structuredPolicy';
 
 function platformIndustryToAsset(item: PlatformIndustryKnowledge): KbAsset {
   return {
@@ -53,32 +57,6 @@ const LEVEL_LABEL: Record<string, { label: string; cls: string }> = {
   row: { label: '字段行', cls: 'bg-amber-50 text-amber-600' },
 };
 
-// 小型 chip 编辑器（关键词 / 问题 / 标签 共用），点 + 号内联加一个
-function ChipAdder({ items, onChange, placeholder }: { items: string[]; onChange: (next: string[]) => void; placeholder: string }) {
-  const [draft, setDraft] = useState('');
-  const [adding, setAdding] = useState(false);
-  function add() {
-    const v = draft.trim();
-    if (v && !items.includes(v)) onChange([...items, v]);
-    setDraft(''); setAdding(false);
-  }
-  return (
-    <div className="flex gap-1.5 flex-wrap items-center">
-      {items.map((v) => (
-        <Badge key={v} className="text-xs bg-gray-100 text-gray-600 font-normal gap-1.5 pr-1.5">
-          {v}<button className="text-gray-400 hover:text-red-500" onClick={() => onChange(items.filter((x) => x !== v))}>✕</button>
-        </Badge>
-      ))}
-      {adding ? (
-        <input autoFocus value={draft} onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()} onBlur={add}
-          placeholder={placeholder} className="h-6 w-32 px-1.5 text-xs border rounded" />
-      ) : (
-        <button onClick={() => setAdding(true)} className="w-6 h-6 flex items-center justify-center rounded border border-dashed text-gray-400 hover:text-blue-600 hover:border-blue-400 text-sm">+</button>
-      )}
-    </div>
-  );
-}
 
 export default function AssetDetailPage() {
   const { assetId } = useParams();
@@ -167,7 +145,10 @@ export default function AssetDetailPage() {
   function saveChunk() {
     if (!editingChunk) return;
     // ACTION: 更新解析块 [PUT] /api/kb/assets/{id}/chunks/{chunk_id}
-    setChunks((prev) => prev.map((c) => (c.id === editingChunk.id ? editingChunk : c)));
+    const nextChunks = chunks.map((c) => c.id === editingChunk.id ? editingChunk : c);
+    setChunks(nextChunks);
+    mockAssetChunks[a.id] = nextChunks;
+    if (!platformMode && a.status !== 'draft' && a.status !== 'archived') handleTransition('learning', '保存并学习');
     setEditingChunk(null);
   }
 
@@ -218,6 +199,7 @@ export default function AssetDetailPage() {
 
   return (
     <div className="space-y-5">
+      <ProfileReturnBanner />
       <div className="flex items-center gap-2 text-sm text-gray-400">
         <button className="hover:text-blue-600" onClick={() => navigate(platformMode ? '/platform/industry-knowledge' : '/knowledge-config/catalog')}>{platformMode ? '行业知识运营' : '知识资产目录'}</button>
         <span>/</span><span className="text-gray-700 truncate max-w-md">{a.name}</span>
@@ -329,16 +311,12 @@ export default function AssetDetailPage() {
       {/* 内容：原文（左） + 解析切片（右，可筛选/勾选/点击编辑/批量操作） */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">内容 — 原文与解析切片 {chunks.length > 0 && <span className="text-xs text-gray-400 font-normal">（共 {a.chunks} 个可检索片段，下方为抽样）</span>}</CardTitle>
-          <p className="text-xs text-gray-400 font-normal mt-1">正文或附件是文档级权威内容；右侧切片是学习后生成的子对象，继承上方业务归类、有效状态、来源、权限等检索元数据。</p>
+          <CardTitle className="text-sm">{a.section === 'structured' ? '结构化数据记录' : '内容 — 原文与解析切片'}</CardTitle>
+          {a.section !== 'structured' && <p className="text-xs text-gray-400 font-normal mt-1">正文与解析切片，共 {a.chunks} 个可检索片段。</p>}
         </CardHeader>
         <CardContent>
           {a.section === 'structured' ? (
-            <div className="rounded-md border border-amber-100 bg-amber-50/60 p-3">
-              <div className="text-sm text-gray-700">结构化数据按字段与数据源实时查询，不生成通用向量切片或 embedding。</div>
-              <div className="mt-2 flex gap-1.5 flex-wrap">{(a.structuredFields ?? []).map((field) => <Badge key={field} className="bg-white text-amber-700 font-normal">{field}</Badge>)}</div>
-              <div className="mt-2 text-xs text-gray-500">数据源：{a.sourceRef}</div>
-            </div>
+            <StructuredRecords key={a.id} asset={a} />
           ) : chunks.length === 0 ? (
             <p className="text-sm text-gray-400">尚未学习完成（解析中或失败），暂无可预览内容。</p>
           ) : (
@@ -438,11 +416,11 @@ export default function AssetDetailPage() {
       {/* 检索参数（只读摘要，配置入口见板块详情） */}
       <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between">
-          <CardTitle className="text-sm">检索参数（来源于该知识板块的统一配置）</CardTitle>
+          <CardTitle className="text-sm">{a.section === 'structured' ? '检索设置' : '检索参数（来源于该知识板块的统一配置）'}</CardTitle>
           <button className="text-xs text-blue-600 hover:underline" onClick={() => navigate(`/knowledge-config/sections/${a.section}`)}>去调整 →</button>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-4 gap-4 text-sm">
+          {a.section === 'structured' ? <div className="grid grid-cols-2 gap-4 text-sm"><div><div className="text-xs text-gray-400">记录召回</div><div className="mt-1">{mockStructuredPolicyData.retrieval === 'hybrid' ? '语义与关键词召回 + 字段筛选' : '关键词召回 + 字段筛选'}</div></div><div><div className="text-xs text-gray-400">单次返回记录上限</div><div className="mt-1">{mockStructuredPolicyData.limit}</div></div></div> : <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <div className="text-xs text-gray-400">分块方式</div>
               <div className="mt-1 text-gray-700">{appliedChunkRule.chunkMethod}</div>
@@ -454,7 +432,7 @@ export default function AssetDetailPage() {
             <div><div className="text-xs text-gray-400">向量权重</div><div className="mt-1 text-gray-700">{sec.vectorWeight}</div></div>
             <div><div className="text-xs text-gray-400">相似度阈值</div><div className="mt-1 text-gray-700">{sec.threshold}</div></div>
             <div><div className="text-xs text-gray-400">Rerank</div><div className="mt-1 text-gray-700">{sec.rerank}</div></div>
-          </div>
+          </div>}
         </CardContent>
       </Card>
 

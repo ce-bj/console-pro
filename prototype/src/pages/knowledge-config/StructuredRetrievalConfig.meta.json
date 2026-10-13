@@ -1,0 +1,10 @@
+{
+  "page": "StructuredRetrievalConfig",
+  "dataSources": [
+    { "name": "mockPlatformFieldsData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/sections/structured/fields" } },
+    { "name": "mockPlatformConfigData", "shape": "object", "endpoint": { "method": "GET", "path": "/api/kb/sections/structured/retrieval" } }
+  ],
+  "actions": [
+    { "handler": "handleSave", "endpoint": { "method": "PUT", "path": "/api/kb/sections/structured/retrieval" }, "requestFrom": "form", "responseShape": "object" }
+  ]
+}
