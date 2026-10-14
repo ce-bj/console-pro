@@ -533,7 +533,10 @@ export interface KbAsset {
   structuredRecordMetadata?: Record<string, { enabled: boolean; keywords: string[]; questions: string[]; tags: string[] }>;
   structuredCapabilityDefaults?: Record<string, import('./structuredPolicy').FieldCapabilities>;
   structuredCapabilities?: Record<string, Partial<import('./structuredPolicy').FieldCapabilities>>;
-  structuredSchema?: Array<{ name: string; label: string; type: string; unit?: string; searchable?: boolean }>;
+  structuredStatistics?: Record<string, import('./structuredPolicy').FieldStatistics>;
+  structuredSemanticEnabled?: boolean;
+  structuredQueryContext?: import('./structuredPolicy').StructuredQueryContext;
+  structuredSchema?: import('./structuredSources').SourceField[];
   structuredChildSchema?: Array<{ name: string; label: string; type: string; unit?: string }>;
   structuredChildRecords?: Record<string, Array<Record<string, string | number>>>;
   structuredSelection?: { application: string; sourceId: string; schemaVersion: number; includeChildren: boolean; childName?: string };
@@ -557,6 +560,7 @@ export interface KbAsset {
   backendPageId?: string;  // 后台应用/数据源页面 id
   backendPath?: string;    // 后台数据来源标识，如 news.list
   fileSize?: string;       // 文件大小（文档知识/上传文件类目使用，如"2.4 MB"）
+  replacementPending?: boolean; // 新文件尚未生成解析结果，不能把旧切片展示成新文件解析内容
   siteUrl?: string;        // 抓取来源网址（web 知识板块使用，用于展示"使用网站"并可点击跳转）
   sourceDataMode?: SourceDataMode; // 页面来源数据形态
   structuredFields?: string[]; // 页面结构化字段名，进入元数据过滤与工具调用提示
@@ -654,19 +658,35 @@ mockAssets.push(...(['platform', 'excel', 'jsonl'] as const).map((kind): KbAsset
 const productDatasetExample = mockAssets.find(a => a.id === 'structured-platform')!;
 Object.assign(productDatasetExample, {
   source: '产品管理 / 产品', sourceRef: '产品管理 / 产品',
+  structuredQueryContext: { purpose: '售前查询产品名称与材质', recordGrain: '一个产品' },
   structuredSelection: { application: '产品管理', sourceId: 'be_product_product', schemaVersion: 3, includeChildren: false },
   structuredFields: ['product_id', 'name', 'material'],
-  structuredSchema: [{ name: 'product_id', label: '产品编号', type: '文本' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'material', label: '材质', type: '文本' }],
+  structuredSchema: [{ name: 'product_id', label: '产品编号', type: '文本', role: 'identifier' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'material', label: '材质', type: '文本' }],
   structuredRecords: [{ product_id: 'P1001', name: '经典款包装产品', material: '不锈钢' }, { product_id: 'P1002', name: '2026 款包装产品', material: '铝合金' }],
 });
 for (const asset of mockAssets.filter(a => a.id === 'structured-excel' || a.id === 'structured-jsonl')) {
-  asset.structuredSchema = [{ name: 'product_id', label: '产品编号', type: '文本' }, { name: 'sku', label: 'SKU', type: '文本' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'color', label: '颜色', type: '单选框' }, { name: 'size', label: '包装大小', type: '单选框' }, { name: 'weight', label: '重量', type: '数值', unit: 'kg' }, { name: 'material', label: '材质', type: '文本' }];
+  asset.structuredQueryContext = { purpose: '售前选型与规格查询', recordGrain: '一个产品规格（SKU）' };
+  asset.structuredSchema = [{ name: 'product_id', label: '产品编号', type: '文本', role: 'identifier' }, { name: 'sku', label: 'SKU', type: '文本', role: 'identifier' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'color', label: '颜色', type: '单选框' }, { name: 'size', label: '包装大小', type: '单选框' }, { name: 'weight', label: '重量', type: '数值', unit: 'kg' }, { name: 'material', label: '材质', type: '文本' }];
   asset.structuredRecordMetadata = {
     [asset.id + ':record:0']: { enabled: true, keywords: ['红色', '小包装'], questions: ['经典款红色小包装的重量是多少？'], tags: ['售前选型'] },
     [asset.id + ':record:1']: { enabled: false, keywords: ['大包装'], questions: [], tags: ['待核对'] },
   };
 }
 mockAssets.push({ ...mockAssets[0], id: 'structured-tenders', name: '采购招标 / 中标公告', section: 'structured', connect: '后台页面', backendPageId: 'be_tender_result', backendPath: 'tender.result', source: '采购招标 / 中标公告', sourceRef: '采购招标 / 中标公告', contentFormat: '结构化记录', chunks: 0, fileSize: undefined, tags: ['公告', '展示示例'], structuredFields: ['title', 'winner'], structuredSchema: [{ name: 'title', label: '公告标题', type: '文本' }, { name: 'winner', label: '中标单位', type: '文本' }], structuredRecords: [{ title: '年度设备采购中标公告', winner: '甲方设备有限公司' }, { title: '办公耗材采购中标公告', winner: '乙方办公用品有限公司' }] });
+mockAssets.push({
+  ...mockAssets[0], id: 'structured-standards', name: '内容生成标准.xlsx', section: 'structured', connect: '上传文件',
+  source: '上传文件', sourceRef: '内容生成标准.xlsx', status: 'published', contentFormat: '结构化记录', chunks: 0,
+  fileSize: '0.1 MB', tags: ['内容生成', '标准'], timeliness: '静态', sync: '手动', freq: '手动', nextSync: '更新文件后处理',
+  primaryCategory: '未指定', secondaryCategory: '未指定', summary: '按内容类型检索写作要求与依据，不属于任何业务应用。',
+  structuredQueryContext: { purpose: '内容生成时按场景查询写作标准', recordGrain: '一条内容写作要求' },
+  structuredFields: ['rule_id', 'scene', 'module', 'requirement'],
+  structuredSchema: [{ name: 'rule_id', label: '规则编号', type: '文本', role: 'identifier' }, { name: 'scene', label: '内容类型', type: '单选框' }, { name: 'module', label: '模块', type: '单选框' }, { name: 'requirement', label: '写作要求', type: '多行文本' }],
+  structuredRecords: [
+    { rule_id: 'R001', scene: '产品详情页', module: '规格参数', requirement: '仅引用已启用的产品或规格记录，缺失参数不推测。' },
+    { rule_id: 'R002', scene: '产品详情页', module: '包装与物流', requirement: '起订量、交货周期引用已确认知识，没有依据时不承诺。' },
+    { rule_id: 'R003', scene: '品牌介绍', module: '荣誉资质', requirement: '引用证书名称及有效期，不使用已过期证书作为当前资质。' },
+  ],
+});
 export const getKnowledgeAsset = (id: string) => mockAssets.find((a) => a.id === id);
 export function upsertKnowledgeAsset(asset: KbAsset) {
   const index = mockAssets.findIndex((a) => a.id === asset.id);

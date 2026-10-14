@@ -64,12 +64,6 @@
       "responseShape": "object"
     },
     {
-      "handler": "handleUpload",
-      "endpoint": { "method": "PUT", "path": "/api/kb/assets/{id}/file" },
-      "requestFrom": "form",
-      "responseShape": "object"
-    },
-    {
       "handler": "handleHealth",
       "endpoint": { "method": "POST", "path": "/api/kb/assets/health-check" },
       "requestFrom": "param",

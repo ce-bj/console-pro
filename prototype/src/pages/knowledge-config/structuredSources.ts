@@ -1,6 +1,7 @@
-export type SourceField = { name: string; label: string; type: string; unit?: string; searchable?: boolean };
+export type SourceField = { name: string; label: string; type: string; unit?: string; searchable?: boolean; role?: 'identifier' };
 export type StructuredSource = {
   id: string; application: string; name: string; count: number; schemaVersion: number;
+  recordGrain?: string;
   fields: SourceField[]; status?: 'unavailable'; reason?: string;
   special?: { kind: 'product-specifications'; enabledProducts: number; totalProducts: number; origin: string };
   children?: { name: string; fields: SourceField[]; kind: 'subtable' | 'sku' };
@@ -8,12 +9,12 @@ export type StructuredSource = {
 
 // DataSlot: 当前网站应用设置提供的数据源及字段，不是平台统一业务模板。
 export const mockStructuredSourcesData: StructuredSource[] = [
-  { id: 'be_product_product', application: '产品管理', name: '产品', count: 128, schemaVersion: 3, fields: [
-    { name: 'product_id', label: '产品编号', type: '文本', searchable: true }, { name: 'name', label: '产品名称', type: '文本', searchable: true },
+  { id: 'be_product_product', application: '产品管理', name: '产品', count: 128, schemaVersion: 3, recordGrain: '一个产品', fields: [
+    { name: 'product_id', label: '产品编号', type: '文本', role: 'identifier', searchable: true }, { name: 'name', label: '产品名称', type: '文本', searchable: true },
     { name: 'material', label: '材质', type: '文本', searchable: true }, { name: 'weight', label: '重量', type: '数值', unit: 'kg' },
     { name: 'description', label: '产品描述', type: '富文本' }, { name: 'image', label: '产品图片', type: '图片' },
   ], children: { name: '产品规格（SKU）', kind: 'sku', fields: [
-    { name: 'sku', label: 'SKU', type: '文本', searchable: true }, { name: 'color', label: '颜色', type: '文本' },
+    { name: 'sku', label: 'SKU', type: '文本', role: 'identifier', searchable: true }, { name: 'color', label: '颜色', type: '文本' },
     { name: 'size', label: '包装大小', type: '文本' }, { name: 'weight', label: '重量', type: '数值', unit: 'kg' }, { name: 'stock', label: '库存', type: '数值' },
   ] } },
   { id: 'be_product_details', application: '产品管理', name: '产品明细', count: 64, schemaVersion: 2, fields: [
@@ -44,7 +45,7 @@ const productSource = mockStructuredSourcesData.find(s => s.id === 'be_product_p
 const specificationFields = productSource.children!.fields;
 productSource.children = undefined;
 mockStructuredSourcesData.push({
-  id: 'special_product_specs', application: '产品管理', name: '产品规格', count: 72, schemaVersion: 3,
+  id: 'special_product_specs', application: '产品管理', name: '产品规格', count: 72, schemaVersion: 3, recordGrain: '一个已开启规格的 SKU（关联一个产品）',
   special: { kind: 'product-specifications', enabledProducts: 36, totalProducts: 128, origin: '产品管理' },
-  fields: [{ name: 'product_id', label: '所属产品编号', type: '文本' }, { name: 'name', label: '产品名称', type: '文本' }, ...specificationFields],
+  fields: [{ name: 'product_id', label: '所属产品编号', type: '文本', role: 'identifier' }, { name: 'name', label: '产品名称', type: '文本' }, ...specificationFields],
 });

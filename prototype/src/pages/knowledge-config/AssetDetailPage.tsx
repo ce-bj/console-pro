@@ -20,9 +20,10 @@ import {
 import { SectionTag, StatusActions, HealthValue, MetricBar } from './shared';
 import { mockPlatformIndustryKnowledgeData, PlatformIndustryKnowledge } from '../N14-IndustryKnowledgePlatformPage';
 import StructuredRecords from './StructuredRecords';
+import KnowledgeFilePreview from './KnowledgeFilePreview';
+import ReplaceKnowledgeFile from './ReplaceKnowledgeFile';
 import ChipAdder from './ChipAdder';
 import ProfileReturnBanner from './ProfileReturnBanner';
-import { mockStructuredPolicyData } from './structuredPolicy';
 
 function platformIndustryToAsset(item: PlatformIndustryKnowledge): KbAsset {
   return {
@@ -75,6 +76,7 @@ export default function AssetDetailPage() {
   const [chunkQuery, setChunkQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingChunk, setEditingChunk] = useState<AssetChunk | null>(null);
+  const [replaceOpen, setReplaceOpen] = useState(false);
 
   useEffect(() => {
     setAsset(resolveAsset());
@@ -82,6 +84,7 @@ export default function AssetDetailPage() {
     setSelected(new Set());
     setChunkQuery('');
     setEditingChunk(null);
+    setReplaceOpen(false);
   }, [assetId, platformMode]);
 
   if (!asset) return <Navigate to={platformMode ? '/platform/industry-knowledge' : '/knowledge-config/catalog'} replace />;
@@ -211,6 +214,7 @@ export default function AssetDetailPage() {
           <p className="text-xs text-gray-400 mt-1">健康度 <HealthValue value={a.health} /> · 创建于 {a.createdAt}（{a.createdBy}） · 最近更新 {a.updatedAt}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {!platformMode && a.connect === '上传文件' && <Button size="sm" variant="outline" disabled={shownStatus === 'learning'} onClick={() => setReplaceOpen(true)}>重新上传并学习</Button>}
           {shownStatus !== 'learning' && <Button size="sm" variant="outline" onClick={() => navigate(platformMode ? `/platform/industry-knowledge?edit=${a.id}` : `/knowledge-config/catalog?edit=${a.id}`)}>编辑</Button>}
           {(shownStatus === 'published' || shownStatus === 'stale') && <Button size="sm" variant="outline" onClick={() => {
             relearn(a.id);
@@ -309,6 +313,8 @@ export default function AssetDetailPage() {
       )}
 
       {/* 内容：原文（左） + 解析切片（右，可筛选/勾选/点击编辑/批量操作） */}
+      {a.section === 'structured' && <Card><CardHeader className="pb-2"><CardTitle className="text-sm">知识文件</CardTitle></CardHeader><CardContent><KnowledgeFilePreview key={a.id + a.sourceRef} asset={a} /></CardContent></Card>}
+      {replaceOpen && <ReplaceKnowledgeFile asset={a} onClose={() => setReplaceOpen(false)} onSaved={next => setAsset(next)} />}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">{a.section === 'structured' ? '结构化数据记录' : '内容 — 原文与解析切片'}</CardTitle>
@@ -316,18 +322,15 @@ export default function AssetDetailPage() {
         </CardHeader>
         <CardContent>
           {a.section === 'structured' ? (
-            <StructuredRecords key={a.id} asset={a} />
+            a.replacementPending ? <p className="text-sm text-amber-700">新文件等待解析与学习，完成后更新记录。原有人工标签与启停将在匹配后保留。</p> : <StructuredRecords key={a.id} asset={a} onAssetChange={next => { upsertKnowledgeAsset(next); setAsset(next); }} />
+          ) : a.replacementPending ? (
+            <KnowledgeFilePreview key={a.id + a.sourceRef} asset={a} />
           ) : chunks.length === 0 ? (
             <p className="text-sm text-gray-400">尚未学习完成（解析中或失败），暂无可预览内容。</p>
           ) : (
             <div className="grid grid-cols-2 gap-4">
               {/* 左：原文 */}
-              <div>
-                <div className="text-xs text-gray-400 mb-1.5">原文</div>
-                <div className="h-[420px] overflow-y-auto rounded border bg-gray-50 p-3 text-xs text-gray-600 whitespace-pre-wrap font-mono">
-                  {rawContent ?? '该来源方式暂无原文预览（如：外部结构化字段）'}
-                </div>
-              </div>
+              <KnowledgeFilePreview key={a.id} asset={a} />
 
               {/* 右：切片列表 */}
               <div>
@@ -413,14 +416,14 @@ export default function AssetDetailPage() {
         </CardContent>
       </Card>
 
-      {/* 检索参数（只读摘要，配置入口见板块详情） */}
-      <Card>
+      {/* 非结构化知识沿用板块级检索参数 */}
+      {a.section !== 'structured' && <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between">
-          <CardTitle className="text-sm">{a.section === 'structured' ? '检索设置' : '检索参数（来源于该知识板块的统一配置）'}</CardTitle>
+          <CardTitle className="text-sm">检索参数（来源于该知识板块的统一配置）</CardTitle>
           <button className="text-xs text-blue-600 hover:underline" onClick={() => navigate(`/knowledge-config/sections/${a.section}`)}>去调整 →</button>
         </CardHeader>
         <CardContent>
-          {a.section === 'structured' ? <div className="grid grid-cols-2 gap-4 text-sm"><div><div className="text-xs text-gray-400">记录召回</div><div className="mt-1">{mockStructuredPolicyData.retrieval === 'hybrid' ? '语义与关键词召回 + 字段筛选' : '关键词召回 + 字段筛选'}</div></div><div><div className="text-xs text-gray-400">单次返回记录上限</div><div className="mt-1">{mockStructuredPolicyData.limit}</div></div></div> : <div className="grid grid-cols-4 gap-4 text-sm">
+          <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
               <div className="text-xs text-gray-400">分块方式</div>
               <div className="mt-1 text-gray-700">{appliedChunkRule.chunkMethod}</div>
@@ -432,9 +435,9 @@ export default function AssetDetailPage() {
             <div><div className="text-xs text-gray-400">向量权重</div><div className="mt-1 text-gray-700">{sec.vectorWeight}</div></div>
             <div><div className="text-xs text-gray-400">相似度阈值</div><div className="mt-1 text-gray-700">{sec.threshold}</div></div>
             <div><div className="text-xs text-gray-400">Rerank</div><div className="mt-1 text-gray-700">{sec.rerank}</div></div>
-          </div>}
+          </div>
         </CardContent>
-      </Card>
+      </Card>}
 
       {/* 来源 */}
       <Card>

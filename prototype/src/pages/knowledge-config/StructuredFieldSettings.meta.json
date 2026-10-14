@@ -1,0 +1,9 @@
+{
+  "page": "StructuredFieldSettings",
+  "dataSources": [
+    { "name": "mockAssetData", "shape": "object", "endpoint": { "method": "GET", "path": "/api/kb/assets/{id}" } }
+  ],
+  "actions": [
+    { "handler": "handleSaveFields", "endpoint": { "method": "PUT", "path": "/api/kb/assets/{id}/structured/fields" }, "requestFrom": "form", "responseShape": "object" }
+  ]
+}

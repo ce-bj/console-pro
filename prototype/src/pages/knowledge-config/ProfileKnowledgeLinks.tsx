@@ -14,7 +14,7 @@ export default function ProfileKnowledgeLinks({ field, siteId }: { field: Profil
         <p className="text-xs text-gray-500">{item.section} · {item.asset.connect} · {item.location}</p>
         <p className="text-xs leading-5 text-gray-700 whitespace-pre-line">{item.excerpt}</p>
         <p className="text-xs text-gray-500">入库来源：{item.asset.sourceRef} · 最近学习：{item.asset.lastSync || '—'}</p>
-        <div className="flex gap-3 items-center">{(item.asset.connect === '前台页面' || item.asset.connect === '后台页面') && <ProfileSourceAction siteId={siteId} sourceId={item.asset.backendPageId || item.asset.frontendPageId || item.asset.id} location={item.asset.sourceRef} />}<Link className="inline-block text-xs text-blue-600" to={`/knowledge-config/sync?tab=updates&keyword=${encodeURIComponent(item.asset.name)}&${context}`}>{item.asset.connect === '上传文件' ? '更新文件' : '更新与学习'}</Link></div>
+        <div className="flex gap-3 items-center">{(item.asset.connect === '前台页面' || item.asset.connect === '后台页面') && <ProfileSourceAction siteId={siteId} sourceId={item.asset.backendPageId || item.asset.frontendPageId || item.asset.id} location={field.maintenancePath} />}<Link className="inline-block text-xs text-blue-600" to={`/knowledge-config/sync?tab=updates&keyword=${encodeURIComponent(item.asset.name)}&${context}`}>{item.asset.connect === '上传文件' ? '更新文件' : '更新与学习'}</Link></div>
       </div>)}
     </div>}
   </div>;

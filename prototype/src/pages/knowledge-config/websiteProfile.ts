@@ -9,7 +9,20 @@ export function registerProfileSupplement(siteId: string, fieldId: string, asset
   const key = `${siteId}:${fieldId}`;
   profileSupplementAssets[key] = [...new Set([...(profileSupplementAssets[key] || []), ...assetIds])];
 }
-export const PROFILE_GROUPS = ['公司信息', '品牌信息', '主营业务', '产品与服务优势', '荣誉与资质', '企业实力', '案例与客户', '联系与咨询'];
+export const PROFILE_GROUPS = ['公司信息', '品牌信息', '主营业务', '产品与服务优势', '荣誉与资质', '企业实力', '案例与客户', '联系与咨询', '网站导航'];
+export const PROFILE_MAINTENANCE_PATHS: Record<string, string> = {
+  公司名称: '网站管理 → 网站设置 → 网站信息',
+  公司简介: '网站管理 → 网站设置 → 网站信息；网站管理 → 内容管理 → 介绍内容',
+  所属行业: '网站管理 → 网站设置 → 网站信息',
+  成立时间: '网站管理 → 内容管理 → 发展历程',
+  主营产品: '网站管理 → 网站设置 → 网站信息',
+  企业资质: '网站管理 → 内容管理 → 荣誉资质；网站管理 → 内容管理 → 介绍内容',
+  产品认证: '网站管理 → 内容管理 → 荣誉资质；网站管理 → 内容管理 → 介绍内容',
+  专利与荣誉: '网站管理 → 内容管理 → 荣誉资质',
+  联系电话: '网站管理 → 内容管理 → 企业网点',
+  公司地址: '网站管理 → 内容管理 → 企业网点',
+  网站栏目: '网站管理 → 网站设置 → 导航管理',
+};
 const FIELD_DEFINITIONS = [
   ['公司信息', '公司名称', '网站设置 / 公司信息', 'Anvil 工业设备有限公司'],
   ['公司信息', '公司简介', '网站内容 / 关于我们', '专注工业设备与配套产品，为企业提供产品选型与应用服务。'],
@@ -34,12 +47,13 @@ const FIELD_DEFINITIONS = [
   ['联系与咨询', '联系电话', '网站设置 / 联系方式', ''],
   ['联系与咨询', '咨询邮箱', '网站设置 / 联系方式', ''],
   ['联系与咨询', '公司地址', '网站设置 / 联系方式', ''],
+  ['网站导航', '网站栏目', '', ''],
 ];
 // DataSlot: 画像示例与真实知识内容分离，正式由当前门户授权知识生成。
 export const mockWebsiteProfilesData: WebsiteProfile[] = ['site_cn', 'site_en', 'site_fr'].map(siteId => ({
   siteId, updatedAt: siteId === 'site_cn' ? '2026-10-08 10:30' : '',
   fields: FIELD_DEFINITIONS.map(([group, label, maintenancePath, sample], index) => ({
-    id: `field_${index}`, group, label, maintenancePath, manual: false,
+    id: `field_${index}`, group, label, maintenancePath: PROFILE_MAINTENANCE_PATHS[label] || '', manual: false,
     evidence: [],
     value: '', sourceValue: '',
   })),

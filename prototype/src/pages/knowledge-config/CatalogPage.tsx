@@ -3,6 +3,7 @@
 import { useState, useEffect, ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ProfileReturnBanner from './ProfileReturnBanner';
+import ReplaceKnowledgeFile from './ReplaceKnowledgeFile';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,7 +55,7 @@ type DocumentMetadataDraft = {
   language?: string;
 };
 
-type BatchExtraField = 'folderId' | 'portalSites' | 'timeliness' | 'tags';
+type BatchExtraField = 'folderId' | 'portalSites' | 'timeliness' | 'tags' | 'structuredSemanticEnabled';
 type BatchTagMode = 'add' | 'remove' | 'replace';
 
 const defaultDocumentMetadata = (): DocumentMetadataDraft => ({
@@ -376,6 +377,7 @@ export default function CatalogPage() {
   const initialSection = (searchParams.get('section') as SectionKey | null);
   const initialStatus = (searchParams.get('status') as KbStatus | null);
   const [rows, setRows] = useState<Row[]>(mockAssets.map(toRow));
+  const [replacementAsset, setReplacementAsset] = useState<KbAsset | null>(null);
   const [q, setQ] = useState('');
   const [sectionFilter, setSectionFilter] = useState<'all' | SectionKey>(initialSection && SECTION_MAP[initialSection] ? initialSection : 'all');
   const [statusFilter, setStatusFilter] = useState<'all' | KbStatus>(initialStatus && STATUS_LABEL[initialStatus] ? initialStatus : 'all');
@@ -414,13 +416,14 @@ export default function CatalogPage() {
     contentFormat: false, validityStatus: false, audience: false, language: false,
   });
   const [batchExtraEnabled, setBatchExtraEnabled] = useState<Record<BatchExtraField, boolean>>({
-    folderId: false, portalSites: false, timeliness: false, tags: false,
+    folderId: false, portalSites: false, timeliness: false, tags: false, structuredSemanticEnabled: false,
   });
   const [batchFolderId, setBatchFolderId] = useState('other');
   const [batchPortalSites, setBatchPortalSites] = useState<string[]>([]);
   const [batchTimeliness, setBatchTimeliness] = useState<Timeliness>('静态');
   const [batchTags, setBatchTags] = useState('');
   const [batchTagMode, setBatchTagMode] = useState<BatchTagMode>('add');
+  const [batchStructuredSemanticEnabled, setBatchStructuredSemanticEnabled] = useState(false);
 
 
   // 编辑（单条完整元数据）弹窗
@@ -603,12 +606,12 @@ export default function CatalogPage() {
   function save() {
     const error = validateDocumentMetadata(form, form.name);
     if (error) { alert(error); return; }
-    if ((form.section === 'content' || form.section === 'structured') && !form.frontendRoute?.trim()) {
-      alert('内容资产和结构化数据必须填写前台路由');
+    if (form.connect === '前台页面' && !form.frontendRoute?.trim()) {
+      alert('从前台页面接入的知识必须填写前台路由');
       return;
     }
     const original = rows.find((r) => r.id === form.id);
-    const relearnKeys: (keyof Row)[] = ['knowledgeBaseType', 'industry', 'primaryCategory', 'secondaryCategory', 'contentFormat', 'validityStatus', 'audience', 'language', 'timeliness', 'tags'];
+    const relearnKeys: (keyof Row)[] = ['knowledgeBaseType', 'industry', 'primaryCategory', 'secondaryCategory', 'contentFormat', 'validityStatus', 'audience', 'language', 'timeliness', 'tags', 'structuredSemanticEnabled'];
     const needsRelearn = !!original && relearnKeys.some((key) => JSON.stringify(original[key]) !== JSON.stringify(form[key]));
     const updated: Row = {
       ...form,
@@ -834,12 +837,13 @@ export default function CatalogPage() {
       knowledgeBaseType: false, industry: false, primaryCategory: false, secondaryCategory: false,
       contentFormat: false, validityStatus: false, audience: false, language: false,
     });
-    setBatchExtraEnabled({ folderId: false, portalSites: false, timeliness: false, tags: false });
+    setBatchExtraEnabled({ folderId: false, portalSites: false, timeliness: false, tags: false, structuredSemanticEnabled: false });
     setBatchFolderId('other');
     setBatchPortalSites([]);
     setBatchTimeliness('静态');
     setBatchTags('');
     setBatchTagMode('add');
+    setBatchStructuredSemanticEnabled(selectedRows.length > 0 && selectedRows.every((row) => row.structuredSemanticEnabled === true));
     setBatchMetaOpen(true);
   }
 
@@ -868,6 +872,7 @@ export default function CatalogPage() {
     if (batchExtraEnabled.portalSites) fields.portalSites = batchPortalSites;
     if (batchExtraEnabled.timeliness) fields.timeliness = batchTimeliness;
     if (batchExtraEnabled.tags) fields.tags = { mode: batchTagMode, values: batchTags.split(/[,，、]/).map((tag) => tag.trim()).filter(Boolean) };
+    if (batchExtraEnabled.structuredSemanticEnabled) fields.structuredSemanticEnabled = batchStructuredSemanticEnabled;
     handleBatchUpdateKnowledgeAssets({ assetIds: selectedRows.map((r) => r.id), fields });
 
     const updated = rows.map((r) => {
@@ -879,7 +884,7 @@ export default function CatalogPage() {
         : batchTagMode === 'replace' ? Array.from(new Set(tagValues))
         : batchTagMode === 'remove' ? r.tags.filter((tag) => !tagValues.includes(tag))
         : Array.from(new Set([...r.tags, ...tagValues]));
-      const retrievalMetadataChanged = enabledKeys.length > 0 || batchExtraEnabled.timeliness || batchExtraEnabled.tags;
+      const retrievalMetadataChanged = enabledKeys.length > 0 || batchExtraEnabled.timeliness || batchExtraEnabled.tags || batchExtraEnabled.structuredSemanticEnabled;
       return {
         ...r,
         ...patch,
@@ -887,6 +892,7 @@ export default function CatalogPage() {
         portalSites: batchExtraEnabled.portalSites ? batchPortalSites : r.portalSites,
         timeliness: batchExtraEnabled.timeliness ? batchTimeliness : r.timeliness,
         tags: nextTags,
+        structuredSemanticEnabled: batchExtraEnabled.structuredSemanticEnabled ? batchStructuredSemanticEnabled : r.structuredSemanticEnabled,
         status: retrievalMetadataChanged && effectiveStatus(r) === 'published' ? 'stale' : r.status,
       } as Row;
     });
@@ -894,7 +900,7 @@ export default function CatalogPage() {
     setRows(updated);
     setSelectedIds(new Set());
     setBatchMetaOpen(false);
-    alert(`已为 ${selectedRows.length} 条知识批量修改 ${enabledKeys.length + enabledExtraKeys.length} 个字段${enabledKeys.length > 0 || batchExtraEnabled.timeliness || batchExtraEnabled.tags ? '；启用中的知识进入待更新，请重新学习' : ''}`);
+    alert(`已为 ${selectedRows.length} 条知识批量修改 ${enabledKeys.length + enabledExtraKeys.length} 个字段${enabledKeys.length > 0 || batchExtraEnabled.timeliness || batchExtraEnabled.tags || batchExtraEnabled.structuredSemanticEnabled ? '；启用中的知识进入待更新，请重新学习' : ''}`);
   }
 
   function batchRelearn() {
@@ -1416,6 +1422,7 @@ export default function CatalogPage() {
   return (
     <div className="space-y-4">
       <ProfileReturnBanner />
+      {replacementAsset && <ReplaceKnowledgeFile asset={replacementAsset} onClose={() => setReplacementAsset(null)} onSaved={next => setRows(items => items.map(row => row.id === next.id ? { ...row, ...toRow(next) } : row))} />}
       <PageHeader
         title="知识资产目录"
         desc="全门户全板块的内容管理主战场——上传/新增内容、选择前台页面入库、做知识健康体检都在这里。前台页面会带入路由、导航路径、页面数据类型和结构化字段，让用户提问时能定位到具体页面信息。"
@@ -1733,6 +1740,7 @@ export default function CatalogPage() {
                         <div className="flex gap-1 justify-end flex-wrap">
                           {lifecycleStatus !== 'archived' && lifecycleStatus !== 'learning' && check.status !== 'useful' && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => viewCheckResult(r)}>修复</Button>}
                           {lifecycleStatus !== 'learning' && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openEdit(r)}>编辑</Button>}
+                          {r.connect === '上传文件' && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={lifecycleStatus === 'learning'} onClick={() => setReplacementAsset(mockAssets.find(asset => asset.id === r.id) || null)}>重新上传并学习</Button>}
                           {lifecycleStatus === 'draft' && <Button size="sm" className="h-7 bg-blue-600 text-xs" onClick={() => transitionRow(r, 'learning', '启用')}>启用</Button>}
                           {(lifecycleStatus === 'published' || lifecycleStatus === 'stale') && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => relearn(r)}>重新学习</Button>}
                           {(lifecycleStatus === 'published' || lifecycleStatus === 'stale') && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => transitionRow(r, 'archived', '停用')}>停用</Button>}
@@ -2220,7 +2228,7 @@ export default function CatalogPage() {
                 <Field label="知识名称" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：退换货流程 FAQ" /></Field>
                 <Field label="知识板块"><select value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value as SectionKey })} className="h-9 w-full px-2 rounded-md border text-sm bg-white">{SECTIONS.map((s) => <option key={s.key} value={s.key}>{s.index} {s.name}</option>)}</select></Field>
                 <Field label="来源方式"><select value={form.connect} onChange={(e) => setForm({ ...form, connect: e.target.value as ConnectType })} className="h-9 w-full px-2 rounded-md border text-sm bg-white">{CONNECT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
-                {(form.section === 'content' || form.section === 'structured') && <Field label="前台路由（必填）" className="col-span-2"><Input value={form.frontendRoute ?? ''} onChange={(e) => setForm({ ...form, frontendRoute: e.target.value || undefined })} placeholder="如：/products/kfr-35" /></Field>}
+                {form.connect === '前台页面' && <Field label="前台路由（必填）" className="col-span-2"><Input value={form.frontendRoute ?? ''} onChange={(e) => setForm({ ...form, frontendRoute: e.target.value || undefined })} placeholder="如：/products/kfr-35" /></Field>}
               </div>
             </div>
 
@@ -2230,7 +2238,9 @@ export default function CatalogPage() {
               <div className="mb-3 text-sm font-medium text-gray-800">治理属性</div>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="时效"><select value={form.timeliness} onChange={(e) => setForm({ ...form, timeliness: e.target.value as Timeliness })} className="h-9 w-full px-2 rounded-md border text-sm bg-white">{TIMELINESS_OPTS.map((v) => <option key={v} value={v}>{v}</option>)}</select></Field>
+                {form.section === 'structured' && <Field label="语义检索"><div className="flex h-9 items-center justify-between rounded-md border bg-white px-3"><span className="text-sm text-gray-700">启用语义检索</span><Switch checked={form.structuredSemanticEnabled === true} onCheckedChange={(structuredSemanticEnabled) => setForm({ ...form, structuredSemanticEnabled })} /></div></Field>}
               </div>
+              {form.section === 'structured' && <p className="mt-2 text-xs text-gray-500">默认使用关键词与字段查询。开启后，当前数据集内标记为“AI”的字段参与语义检索。</p>}
             </div>
 
             <div className="col-span-2 rounded-md border border-gray-200 bg-gray-50/50 p-3">
@@ -2408,8 +2418,14 @@ export default function CatalogPage() {
             onToggleField={toggleBatchMetaField}
             disabledFields={canBatchContentFormat ? [] : ['contentFormat']}
           />
+          {getSelectedSection() === 'structured' && <div className="rounded-md border border-blue-100 bg-blue-50/40 p-3">
+            <Field label={<label className="flex cursor-pointer items-center gap-1.5"><input type="checkbox" checked={batchExtraEnabled.structuredSemanticEnabled} onChange={() => toggleBatchExtraField('structuredSemanticEnabled')} className="accent-blue-600" />语义检索</label>}>
+              <div className={`flex h-9 items-center justify-between rounded-md border bg-white px-3 ${batchExtraEnabled.structuredSemanticEnabled ? '' : 'pointer-events-none opacity-40'}`}><span className="text-sm text-gray-700">启用语义检索</span><Switch checked={batchStructuredSemanticEnabled} onCheckedChange={setBatchStructuredSemanticEnabled} /></div>
+            </Field>
+            <p className="mt-2 text-xs text-gray-500">仅结构化数据可批量修改。默认是关键词与字段查询；启用后，数据集内标记为“AI”的字段参与语义检索。</p>
+          </div>}
           {!canBatchContentFormat && <p className="text-xs text-amber-600">内容形式由知识板块决定：跨板块选择，或选中问答知识/结构化数据时，不允许批量覆盖。</p>}
-          {(Object.values(batchMetaEnabled).some(Boolean) || batchExtraEnabled.timeliness || batchExtraEnabled.tags) && <p className="rounded bg-orange-50 px-3 py-2 text-xs text-orange-700">分类、内容属性、时效或标签发生变化后，启用中的知识将进入“待更新”，需要重新学习；仅调整知识目录或适用门户时立即生效，不触发重新学习。</p>}
+          {(Object.values(batchMetaEnabled).some(Boolean) || batchExtraEnabled.timeliness || batchExtraEnabled.tags || batchExtraEnabled.structuredSemanticEnabled) && <p className="rounded bg-orange-50 px-3 py-2 text-xs text-orange-700">分类、内容属性、时效、标签或语义检索发生变化后，启用中的知识将进入“待更新”，需要重新学习；仅调整知识目录或适用门户时立即生效，不触发重新学习。</p>}
           <DialogFooter>
             <Button size="sm" variant="outline" onClick={() => setBatchMetaOpen(false)}>取消</Button>
             <Button size="sm" className="bg-blue-600" disabled={!Object.values(batchMetaEnabled).some(Boolean) && !Object.values(batchExtraEnabled).some(Boolean)} onClick={applyBatchMeta}>

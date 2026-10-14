@@ -1,8 +1,7 @@
 // 平台统一规则；客户后台读取已发布配置。
 export const mockStructuredPolicyData = {
-  version: 1, duplicate: 'update', invalid: 'reject', maxFileMB: 100,
-  retrieval: 'hybrid', richText: 'plain', schemaChange: 'pause', limit: 10, childLimit: 5,
-  recommendation: true, lowCardinality: 50, maxFields: 200,
+  version: 1,
+  recommendation: true,
 };
 
 export const CAPABILITIES = [
@@ -12,6 +11,15 @@ export const CAPABILITIES = [
 ] as const;
 export type Capability = typeof CAPABILITIES[number]['key'];
 export type FieldCapabilities = Record<Capability, boolean>;
+export function applyBatchFieldCapability(fields: { name: string; type: string }[], selected: string[], overrides: Record<string, Partial<FieldCapabilities>>, capability: Capability, enabled: boolean) {
+  const next = { ...overrides };
+  let skipped = 0;
+  for (const field of fields.filter(field => selected.includes(field.name))) {
+    if (!getFieldPolicy(field.type).supported.includes(capability)) { skipped++; continue; }
+    next[field.name] = { ...next[field.name], [capability]: enabled };
+  }
+  return { overrides: next, skipped };
+}
 export type FieldPolicy = { type: string; group: string; supported: Capability[]; defaults: FieldCapabilities };
 const flags = (keys: Capability[]): FieldCapabilities => Object.fromEntries(CAPABILITIES.map(c => [c.key, keys.includes(c.key)])) as FieldCapabilities;
 const fieldPolicy = (type: string, group: string, defaults: Capability[], supported: Capability[] = defaults): FieldPolicy => ({ type, group, supported, defaults: flags(defaults) });
@@ -48,6 +56,51 @@ export function getFieldPolicy(type: string): FieldPolicy {
 export function resolveFieldCapabilities(type: string, overrides: Partial<FieldCapabilities> = {}): FieldCapabilities {
   const policy = getFieldPolicy(type);
   return Object.fromEntries(CAPABILITIES.map(({ key }) => [key, policy.supported.includes(key) && (overrides[key] ?? policy.defaults[key])])) as FieldCapabilities;
+}
+
+export const AGGREGATIONS = [
+  { key: 'distinct', label: '去重计数' }, { key: 'min', label: '最小值' },
+  { key: 'max', label: '最大值' }, { key: 'sum', label: '求和' }, { key: 'avg', label: '平均值' },
+] as const;
+export type Aggregation = typeof AGGREGATIONS[number]['key'];
+export type AggregationPolicy = { key: string; label: string; types: string[]; supported: Aggregation[]; defaults: Aggregation[] };
+// 默认是初始化值，不是租户权限；supported 是不可绕过的类型边界。
+export const mockAggregationPoliciesData: AggregationPolicy[] = [
+  { key: 'text', label: '单行文本', types: ['单行文本'], supported: ['distinct'], defaults: ['distinct'] },
+  { key: 'option', label: '单值选项 / 分类 / 地区 / 布尔', types: ['单选框', '下拉单选', '分类', '国家/地区', '布尔'], supported: ['distinct'], defaults: ['distinct'] },
+  { key: 'number', label: '数值 / 评分 / 滑动条 / 库存', types: ['数值', '评分', '滑动条', '库存'], supported: ['distinct', 'min', 'max', 'sum', 'avg'], defaults: ['min', 'max'] },
+  { key: 'date', label: '日期', types: ['日期'], supported: ['distinct', 'min', 'max'], defaults: ['min', 'max'] },
+];
+export function getAggregationPolicy(field: { type: string; role?: 'identifier' }): AggregationPolicy {
+  if (field.role === 'identifier') return { key: 'identifier', label: '标识字段', types: [], supported: ['distinct'], defaults: ['distinct'] };
+  return mockAggregationPoliciesData.find(p => p.types.includes(getFieldPolicy(field.type).type)) || { key: 'none', label: '不支持统计', types: [], supported: [], defaults: [] };
+}
+export function resolveAggregations(field: { type: string; role?: 'identifier' }, selected?: Aggregation[]): Aggregation[] {
+  const rule = getAggregationPolicy(field);
+  return (selected ?? rule.defaults).filter((op, index, values) => rule.supported.includes(op) && values.indexOf(op) === index);
+}
+export type StructuredQueryContext = { purpose: string; recordGrain: string };
+export type FieldStatistics = { operations: Aggregation[]; note: string };
+export function statisticsError(fields: Array<{ name: string; type: string; role?: 'identifier' }>, statistics: Record<string, FieldStatistics>, context: StructuredQueryContext): string {
+  for (const field of fields) {
+    const settings = statistics[field.name];
+    if (settings?.operations.some(op => op === 'sum' || op === 'avg') && (!settings.note.trim() || !context.recordGrain.trim())) return '开启求和或平均值前，请填写每行代表什么，以及该字段的统计口径。';
+  }
+  return '';
+}
+
+export function initializeStructuredDefaults(asset: {
+  id: string; structuredRecords?: Array<Record<string, string | number>>; structuredRecordIds?: string[];
+  structuredCapabilityDefaults?: Record<string, FieldCapabilities>; structuredStatistics?: Record<string, FieldStatistics>;
+}, fields: Array<{ name: string; type: string; role?: 'identifier' }>) {
+  // 演示数据的行号标识不用于生产；重新取得对象或增加字段也要初始化，不能只依赖组件首次挂载。
+  asset.structuredRecordIds ??= (asset.structuredRecords || []).map((_, index) => asset.id + ':record:' + index);
+  asset.structuredCapabilityDefaults ??= {};
+  asset.structuredStatistics ??= {};
+  fields.forEach(field => {
+    asset.structuredCapabilityDefaults![field.name] ??= resolveFieldCapabilities(field.type);
+    asset.structuredStatistics![field.name] ??= { operations: resolveAggregations(field), note: '' };
+  });
 }
 
 // 当前客户网站属性模板示例，由网站产品后台提供，不属于平台全局配置。

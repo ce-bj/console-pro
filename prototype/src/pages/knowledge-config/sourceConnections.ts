@@ -55,8 +55,8 @@ export const mockSourceConnectionsData: SourceConnection[] = [
   },
   {
     id: 'product-detail', sourceId: 'fp_product_detail_cn', name: '中文站 / 产品中心 / 空气滤清器', kind: '前台页面', section: 'content',
-    count: 26, added: 0, removed: 0, status: 'active', autoUpdate: true, frequency: '实时',
-    lastDetected: '2026-09-29 09:26', lastSync: '2026-09-29 09:26', nextSync: '内容发布时', health: 88, pausedIds: [], addedItems: [], removedItems: [],
+    count: 26, added: 0, removed: 0, status: 'active', autoUpdate: true, frequency: '每日',
+    lastDetected: '2026-09-29 09:26', lastSync: '2026-09-29 09:26', nextSync: '下次 00:00', health: 88, pausedIds: [], addedItems: [], removedItems: [],
     logs: [log('l-201', '2026-09-29 09:26', '实时更新', '成功', '栏目正文发布后自动完成学习，栏目数量无变化。')],
   },
   {
@@ -119,8 +119,10 @@ mockAssets.filter((asset) => (asset.section === 'content' || asset.section === '
       source.count = 1;
       source.added = 0;
       source.status = asset.status === 'archived' ? 'paused' : 'active';
+      source.frequency = asset.section === 'structured' ? '每周' : '每日';
+      source.autoUpdate = asset.status !== 'archived';
       source.lastSync = asset.lastSync || asset.updatedAt;
-      source.nextSync = asset.nextSync || '内容发布时';
+      source.nextSync = source.status === 'paused' ? '已关闭使用' : source.frequency === '每周' ? '下周一 00:00' : '下次 00:00';
       source.health = asset.health;
     }
   }

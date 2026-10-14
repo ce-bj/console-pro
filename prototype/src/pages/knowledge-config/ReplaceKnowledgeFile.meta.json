@@ -1,0 +1,5 @@
+{
+  "page": "ReplaceKnowledgeFile",
+  "dataSources": [{ "name": "mockAssetData", "shape": "object", "endpoint": { "method": "GET", "path": "/api/kb/assets/{id}" } }],
+  "actions": [{ "handler": "handleReplaceFile", "endpoint": { "method": "PUT", "path": "/api/kb/assets/{id}/file" }, "requestFrom": "form", "responseShape": "object" }]
+}

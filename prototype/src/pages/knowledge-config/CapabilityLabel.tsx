@@ -4,10 +4,10 @@ import { Capability } from './structuredPolicy';
 const HELP: Record<Capability, string> = {
   search: '让字段内容参与关键词搜索。',
   filter: '用字段值限定结果，例如颜色、价格范围。',
-  facet: '按字段值统计数量，生成分类筛选项。',
+  facet: '按字段值分组并统计可用记录数，例如统计各颜色的规格数量。',
   sort: '按字段值排列结果，例如价格从低到高。',
   display: '在检索结果中展示这个字段。',
-  ai: '让字段内容参与 AI 语义检索。',
+  ai: '仅在数据集启用语义检索时，让字段内容参与 AI 语义检索。',
 };
 
 export default function CapabilityLabel({ capability, label }: { capability: Capability; label: string }) {
