@@ -2,7 +2,7 @@
   "page": "IndustryKnowledgePlatformPage",
   "route": "/platform/industry-knowledge",
   "dataSources": [
-    { "name": "mockPlatformIndustryKnowledgeData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge" }, "queryParams": ["keyword", "primaryIndustry", "secondaryIndustry", "primaryCategory", "secondaryCategory", "contentFormat", "validityStatus", "timeliness", "audience", "language", "tag", "status", "page", "pageSize"] },
+    { "name": "mockPlatformIndustryKnowledgeData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge" }, "queryParams": ["keyword", "section", "primaryIndustry", "secondaryIndustry", "primaryCategory", "secondaryCategory", "contentFormat", "validityStatus", "timeliness", "audience", "language", "tag", "status", "page", "pageSize"] },
     { "name": "mockIndustryKnowledgeVersionsData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge/versions" } },
     { "name": "mockTenantPushTargetsData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/platform/industry-knowledge/push-targets" } }
   ],

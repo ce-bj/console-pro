@@ -23,6 +23,12 @@
   ],
   "actions": [
     {
+      "handler": "handleSaveProfileContent",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/website-profile/fields/{id}/content" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
       "handler": "handleFetchProfile",
       "endpoint": {
         "method": "GET",
@@ -37,6 +43,42 @@
         "method": "POST",
         "path": "/api/kb/website-profile/regenerate"
       },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCreateProfileGroup",
+      "endpoint": { "method": "POST", "path": "/api/kb/website-profile/groups" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleUpdateProfileGroup",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/website-profile/groups/{id}" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleDeleteProfileGroup",
+      "endpoint": { "method": "DELETE", "path": "/api/kb/website-profile/groups/{id}" },
+      "requestFrom": "param",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleCreateProfileField",
+      "endpoint": { "method": "POST", "path": "/api/kb/website-profile/fields" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleUpdateProfileField",
+      "endpoint": { "method": "PATCH", "path": "/api/kb/website-profile/fields/{id}" },
+      "requestFrom": "form",
+      "responseShape": "object"
+    },
+    {
+      "handler": "handleDeleteProfileField",
+      "endpoint": { "method": "DELETE", "path": "/api/kb/website-profile/fields/{id}" },
       "requestFrom": "param",
       "responseShape": "object"
     }

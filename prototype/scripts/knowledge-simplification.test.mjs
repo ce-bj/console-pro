@@ -1,0 +1,31 @@
+import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import ts from 'typescript';
+
+const load = async name => {
+  const source = readFileSync(new URL('../src/pages/knowledge-config/' + name + '.ts', import.meta.url), 'utf8');
+  const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+  return import('data:text/javascript;base64,' + Buffer.from(code).toString('base64'));
+};
+const actions = await load('connectionActions');
+assert.equal(typeof actions.canSyncNewBackendRecords, 'function');
+const source = { kind: '后台页面', status: 'pending', added: 2, removed: 1 };
+assert.equal(actions.canSyncNewBackendRecords(source), true);
+assert.equal(actions.canSyncNewBackendRecords({ ...source, kind: '前台页面' }), false);
+assert.equal(actions.canSyncNewBackendRecords({ ...source, added: 0 }), false);
+for (const status of ['paused', 'syncing', 'failed']) assert.equal(actions.canSyncNewBackendRecords({ ...source, status }), false);
+assert.equal(actions.canSyncNewBackendRecords(source, true), false);
+assert.equal('frequency' in actions.CONNECTION_ACTIONS, false);
+const sources = await load('structuredSources');
+assert.equal(typeof sources.structuredSourcesForSite, 'function');
+assert.deepEqual(sources.structuredSourcesForSite(''), []);
+assert.ok(sources.structuredSourcesForSite('site_cn').length > 0);
+assert.ok(sources.structuredSourcesForSite('site_en').length > 0);
+assert.ok(sources.structuredSourcesForSite('site_en').every(s => s.siteId === 'site_en'));
+assert.deepEqual(sources.structuredSourcesForSite('site_fr'), []);
+assert.deepEqual(sources.initialStructuredDraft(), { siteId: '', selections: [] });
+assert.deepEqual(sources.initialStructuredDraft('site_cn'), { siteId: 'site_cn', selections: [] });
+assert.deepEqual(sources.plannedBackendBoards(['content', 'structured'], ['content']), ['structured']);
+assert.deepEqual(sources.plannedBackendBoards(['content', 'structured'], []), ['content', 'structured']);
+assert.deepEqual(sources.plannedBackendBoards(['content'], ['content']), []);
+console.log('仅后台新增可手动同步、固定更新周期、网站隔离选择：通过');

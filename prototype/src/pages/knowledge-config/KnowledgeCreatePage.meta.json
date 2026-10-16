@@ -3,7 +3,6 @@
   "route": "/knowledge-config/catalog/new",
   "dataSources": [
     { "name": "mockFrontendPageSourcesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/frontend-site-structure" } },
-    { "name": "mockBackendPageSourcesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/source-pages/backend" } },
     { "name": "mockPlatformKnowledgeSourcesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/industry-library" } }
   ],
   "actions": [

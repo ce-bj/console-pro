@@ -1,0 +1,9 @@
+{
+  "page": "StructuredRecords",
+  "dataSources": [
+    { "name": "mockStructuredRecordAssetData", "shape": "object", "endpoint": { "method": "GET", "path": "/api/kb/assets/{id}" } }
+  ],
+  "actions": [
+    { "handler": "handleFetchStructuredRecords", "endpoint": { "method": "GET", "path": "/api/kb/assets/{id}/structured/records" }, "requestFrom": "param", "responseShape": "array" }
+  ]
+}

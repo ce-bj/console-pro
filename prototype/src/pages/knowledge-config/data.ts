@@ -558,6 +558,7 @@ export interface KbAsset {
   frontendRoute?: string;  // 前台页面路由，用于用户提问时定位页面上下文
   frontendNavPath?: string;// 前台导航路径，如 产品中心 / 空气滤清器 / KFR-35
   backendPageId?: string;  // 后台应用/数据源页面 id
+  ingestGroupId?: string;  // 同一网站来源的内容资产与结构化数据共用，用于详情关联
   backendPath?: string;    // 后台数据来源标识，如 news.list
   fileSize?: string;       // 文件大小（文档知识/上传文件类目使用，如"2.4 MB"）
   replacementPending?: boolean; // 新文件尚未生成解析结果，不能把旧切片展示成新文件解析内容
@@ -597,6 +598,7 @@ export interface KbAsset {
 // 企业侧仅可浏览并导入到本企业知识资产目录，不支持直接新增或编辑原文。
 export interface IndustryLibraryItem {
   id: string;
+  section?: SectionKey;
   industry: string;
   name: string;
   primaryCategory: string;
@@ -663,6 +665,12 @@ Object.assign(productDatasetExample, {
   structuredFields: ['product_id', 'name', 'material'],
   structuredSchema: [{ name: 'product_id', label: '产品编号', type: '文本', role: 'identifier' }, { name: 'name', label: '产品名称', type: '文本' }, { name: 'material', label: '材质', type: '文本' }],
   structuredRecords: [{ product_id: 'P1001', name: '经典款包装产品', material: '不锈钢' }, { product_id: 'P1002', name: '2026 款包装产品', material: '铝合金' }],
+  ingestGroupId: 'site_cn:be_product_product',
+});
+mockAssets.push({
+  ...productDatasetExample, id: 'content-product-example', name: '产品管理 / 产品', section: 'content', contentFormat: '文章',
+  sourceDataMode: '页面正文+结构化字段', chunks: 2, structuredRecords: undefined, structuredSchema: undefined,
+  structuredSelection: undefined, structuredQueryContext: undefined, summary: '产品介绍按内容资产学习，产品字段同时以结构化数据记录接入。',
 });
 for (const asset of mockAssets.filter(a => a.id === 'structured-excel' || a.id === 'structured-jsonl')) {
   asset.structuredQueryContext = { purpose: '售前选型与规格查询', recordGrain: '一个产品规格（SKU）' };
@@ -687,6 +695,37 @@ mockAssets.push({
     { rule_id: 'R003', scene: '品牌介绍', module: '荣誉资质', requirement: '引用证书名称及有效期，不使用已过期证书作为当前资质。' },
   ],
 });
+// 画像演示所需的知识来源；画像字段仍通过资产与切片追溯，不直接拿此处的后台字段填值。
+mockAssets.push(
+  {
+    ...mockAssets[0], id: 'profile-site-cn', name: 'Anvil 网站信息', section: 'content', connect: '后台页面',
+    knowledgeBaseType: '企业公共知识库', primaryCategory: '企业基础信息', secondaryCategory: '未指定', contentFormat: '文章',
+    source: '网站管理 / 网站设置 / 网站信息', sourceRef: '中文站 · 网站信息 / 公司介绍与品牌资料', backendPath: 'site.info',
+    portalSites: ['site_cn'], sourceDataMode: '页面正文', fileSize: undefined, sync: '定时同步', freq: '每日 00:00', nextSync: '每日 00:00',
+    status: 'published', validityStatus: '现行有效', health: 96, chunks: 2, tags: ['公司介绍', '品牌'], createdAt: '2026-10-01', createdBy: '系统同步 · 后台页面', lastSync: '2026-10-08 00:00', updatedAt: '2026-10-08',
+  },
+  {
+    ...mockAssets[0], id: 'profile-store-cn', name: 'Anvil 企业网点', section: 'content', connect: '后台页面',
+    knowledgeBaseType: '企业公共知识库', primaryCategory: '联系与反馈', secondaryCategory: '未指定', contentFormat: '文章',
+    source: '网站管理 / 内容管理 / 企业网点', sourceRef: '中文站 · 企业网点 / 总部', backendPath: 'stores.list',
+    portalSites: ['site_cn'], sourceDataMode: '页面正文', fileSize: undefined, sync: '定时同步', freq: '每日 00:00', nextSync: '每日 00:00',
+    status: 'published', validityStatus: '现行有效', health: 95, chunks: 1, tags: ['联系方式', '总部'], createdAt: '2026-10-01', createdBy: '系统同步 · 后台页面', lastSync: '2026-10-08 00:00', updatedAt: '2026-10-08',
+  },
+  {
+    ...mockAssets[0], id: 'profile-honor-cn', name: 'Anvil 荣誉资质', section: 'content', connect: '后台页面',
+    knowledgeBaseType: '企业公共知识库', primaryCategory: '企业基础信息', secondaryCategory: '未指定', contentFormat: '文章',
+    source: '网站管理 / 内容管理 / 荣誉资质', sourceRef: '中文站 · 荣誉资质 / 已发布证书', backendPath: 'honors.list',
+    portalSites: ['site_cn'], sourceDataMode: '页面正文', fileSize: undefined, sync: '定时同步', freq: '每日 00:00', nextSync: '每日 00:00',
+    status: 'published', validityStatus: '现行有效', health: 93, chunks: 1, tags: ['资质', '认证'], createdAt: '2026-10-01', createdBy: '系统同步 · 后台页面', lastSync: '2026-10-08 00:00', updatedAt: '2026-10-08',
+  },
+  {
+    ...mockAssets[0], id: 'profile-case-cn', name: 'Anvil 客户案例（原型示例）.pdf', section: 'document', connect: '上传文件',
+    knowledgeBaseType: '企业公共知识库', primaryCategory: '企业基础信息', secondaryCategory: '未指定', contentFormat: '报告',
+    source: '企业授权案例资料', sourceRef: 'Anvil 客户案例（原型示例）.pdf · 第 2 页', backendPath: undefined,
+    portalSites: ['site_cn'], fileSize: '0.8 MB', status: 'published', validityStatus: '现行有效', health: 91, chunks: 1,
+    tags: ['客户案例', '原型示例'], createdAt: '2026-10-01', createdBy: '王芳（内容运营）', lastSync: '2026-10-08 10:00', updatedAt: '2026-10-08',
+  },
+);
 export const getKnowledgeAsset = (id: string) => mockAssets.find((a) => a.id === id);
 export function upsertKnowledgeAsset(asset: KbAsset) {
   const index = mockAssets.findIndex((a) => a.id === asset.id);
@@ -723,6 +762,23 @@ export interface AssetChunk {
 }
 
 export const mockAssetChunks: Record<string, AssetChunk[]> = {
+  'profile-site-cn': [
+    { id: 'profile-site-company', index: 1, level: 'parent', type: 'Text', text: 'Anvil 工业设备有限公司属于制造业与工业领域，专注工业设备及配套产品，提供产品选型、应用支持与售后服务。', tokens: 63, embedded: true, enabled: true, keywords: ['Anvil', '公司介绍'], questions: ['Anvil 公司做什么？'], tags: ['公司信息'] },
+    { id: 'profile-site-brand', index: 2, level: 'parent', type: 'Text', text: 'Anvil 是面向企业采购的工业设备品牌，围绕工业设备选型提供可核对的技术资料、产品适配建议和持续服务支持。', tokens: 58, embedded: true, enabled: true, keywords: ['Anvil', '品牌卖点'], questions: ['Anvil 的核心卖点是什么？'], tags: ['品牌'] },
+  ],
+  'profile-store-cn': [
+    { id: 'profile-store-contact', index: 1, level: 'parent', type: 'Text', text: 'Anvil 总部位于宁夏银川市金凤区工业园。客户咨询电话：400-000-0000；咨询邮箱：service@anvil.example。', tokens: 52, embedded: true, enabled: true, keywords: ['电话', '地址', '邮箱'], questions: ['怎么联系 Anvil？'], tags: ['总部网点'] },
+  ],
+  'profile-honor-cn': [
+    { id: 'profile-honor-cert', index: 1, level: 'parent', type: 'Text', text: 'Anvil 已通过 ISO 9001 质量管理体系认证；Anvil 系列产品具有 CE 认证。不同证书的适用产品应以证书原件为准。', tokens: 60, embedded: true, enabled: true, keywords: ['ISO 9001', 'CE'], questions: ['Anvil 有哪些资质认证？'], tags: ['资质证书'] },
+  ],
+  'profile-case-cn': [
+    { id: 'profile-case-project', index: 1, level: 'parent', type: 'Text', text: '原型演示案例：2025 年，Anvil 为银川星源机械的车间过滤设备提供产品选型与安装支持。案例资料列明合作客户为银川星源机械；正式环境须核验客户授权。', tokens: 78, embedded: true, enabled: true, keywords: ['客户案例', '银川星源机械'], questions: ['Anvil 有哪些客户案例？'], tags: ['原型示例'] },
+  ],
+  'content-product-example': [
+    { id: 'content-product-1', index: 1, level: 'parent', type: 'Text', text: '经典款包装产品采用不锈钢材质，提供红色与蓝色等规格选择，适合售前介绍与产品选型。', tokens: 50, embedded: true, enabled: true, keywords: ['经典款', '不锈钢'], questions: ['经典款包装产品有什么特点？'], tags: ['产品介绍'] },
+    { id: 'content-product-2', index: 2, level: 'parent', type: 'Text', text: '2026 款包装产品采用铝合金材质，详情与规格可从产品管理中持续更新。', tokens: 36, embedded: true, enabled: true, keywords: ['2026 款', '铝合金'], questions: ['2026 款包装产品是什么材质？'], tags: ['产品介绍'] },
+  ],
   k1: [
     { id: 'k1c1', index: 1, level: 'parent', type: 'Text', text: '第三章 产品规格与技术参数：本章介绍 Anvil 系列产品的核心技术指标，包括承重、耐候、防护等级等国标测试数据……', tokens: 612, embedded: true, enabled: true, keywords: ['技术参数', '国标测试'], questions: ['Anvil 产品有哪些技术指标？'], tags: ['规格'] },
     { id: 'k1c2', index: 1, level: 'child', parentIndex: 1, type: 'Text', text: '3.2 保修条款：产品自购买之日起提供 24 个月质保，涉及非人为损坏的核心部件终身维保。', tokens: 118, embedded: true, enabled: true, keywords: ['保修', '质保'], questions: ['保修期是多久？', '核心部件坏了怎么办？'], tags: ['售后'] },
@@ -784,6 +840,7 @@ export const mockAssetChunks: Record<string, AssetChunk[]> = {
 
 // ── DataSlot: 原文预览（内容详情左侧原文栏，仅示例几条）───────────────
 export const mockRawContent: Record<string, string> = {
+  'content-product-example': '# 产品管理 / 产品\n\n经典款包装产品采用不锈钢材质，提供红色与蓝色等规格选择。\n\n2026 款包装产品采用铝合金材质，详情与规格由产品管理持续更新。',
   k1: '# Anvil 产品白皮书\n\n## 第三章 产品规格与技术参数\n本章介绍 Anvil 系列产品的核心技术指标，包括承重、耐候、防护等级等国标测试数据。\n\n### 3.2 保修条款\n产品自购买之日起提供 24 个月质保，涉及非人为损坏的核心部件终身维保。\n\n## 第四章 认证与资质\n本公司产品已通过 ISO9001、CE 认证，具体证书编号见附录表格。\n\n（附录：认证编号表格，因跨页排版，解析时可能识别不完整）',
   k2: 'Q: 可以退货吗？多久内？\nA: 自签收之日起 7 天内，商品完好可无理由退货。\n\nQ: 退货运费谁承担？\nA: 非质量问题由买家承担，质量问题由卖家承担。\n\nQ: 换货需要多久到货？\nA: 换货商品在收到退回件后 3 个工作日内寄出。',
   k4: '# KFR-35 空气滤清器\n\nKFR-35 空气滤清器采用三层复合滤纸，过滤效率达 99.7%，适配多种车型。\n\n建议每行驶 1 万公里或半年更换一次，多尘环境应缩短至 5000 公里。',

@@ -10,25 +10,29 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import {
-  AUDIENCE_OPTIONS, ContentFormat as KnowledgeContentFormat, CONTENT_FORMATS as KB_CONTENT_FORMATS,
-  INDUSTRY_TREE, LANGUAGE_OPTIONS, PRIMARY_CATEGORIES, SECTION_MAP, VALIDITY_STATUSES,
+  AUDIENCE_OPTIONS, ContentFormat as KnowledgeContentFormat, CONTENT_FORMATS as KB_CONTENT_FORMATS, KbAsset, SectionKey,
+  INDUSTRY_TREE, LANGUAGE_OPTIONS, PRIMARY_CATEGORIES, VALIDITY_STATUSES,
   TIMELINESS_OPTS, Timeliness, mockPortalSites, mockCustomSchemaFields,
-  generalChunkRule, mockExtraChunkRules, secondaryIndustriesOf,
+  secondaryIndustriesOf, mockIndustryLibrary, IndustryLibraryItem,
 } from './knowledge-config/data';
 
 type KnowledgeStatus = 'draft' | 'published' | 'archived';
 type PushStatus = 'not_pushed' | 'partial' | 'synced';
-type ContentFormat = Exclude<KnowledgeContentFormat, '问答对' | '结构化记录'>;
+type ContentFormat = KnowledgeContentFormat;
+type PlatformKnowledgeSection = Extract<SectionKey, 'industry' | 'document' | 'faq' | 'structured'>;
 type BatchEditField = 'folderId' | 'primaryCategory' | 'secondaryCategory' | 'contentFormat' | 'validityStatus' | 'timeliness' | 'audience' | 'language' | 'tags';
 
 export interface PlatformIndustryKnowledge {
   id: string;
+  section?: PlatformKnowledgeSection;
+  connect?: '上传文件' | '平台';
   title: string;
   primaryIndustry: string;
   secondaryIndustry: string;
   primaryCategory: string;
   secondaryCategory: string;
   contentFormat: ContentFormat;
+  processingRule?: string;
   audience?: string;
   validityStatus?: string;
   language?: string;
@@ -77,6 +81,7 @@ interface TenantPushTarget {
 
 interface KnowledgeDraft {
   title: string;
+  section: PlatformKnowledgeSection;
   primaryIndustry: string;
   secondaryIndustry: string;
   primaryCategory: string;
@@ -108,9 +113,8 @@ const PUSH_CONFIG: Record<PushStatus, { label: string; cls: string }> = {
   partial: { label: '部分企业', cls: 'bg-amber-50 text-amber-700' },
   synced: { label: '已同步', cls: 'bg-blue-50 text-blue-700' },
 };
-const CONTENT_FORMATS: ContentFormat[] = KB_CONTENT_FORMATS.filter(
-  (item): item is ContentFormat => item !== '问答对' && item !== '结构化记录',
-);
+const CONTENT_FORMATS: ContentFormat[] = [...KB_CONTENT_FORMATS, '问答对', '结构化记录'];
+const BOARD_LABELS: Record<PlatformKnowledgeSection, string> = { industry: '行业知识', document: '文档知识', faq: '问答知识', structured: '结构化数据' };
 
 // PAGINATION: page,pageSize
 export const mockPlatformIndustryKnowledgeData: PlatformIndustryKnowledge[] = [
@@ -120,6 +124,45 @@ export const mockPlatformIndustryKnowledgeData: PlatformIndustryKnowledge[] = [
   { id: 'pik_004', title: '建筑装饰工程常见问题汇编', primaryIndustry: '家居建材', secondaryIndustry: '建筑装饰', primaryCategory: '常见问题', secondaryCategory: '', contentFormat: '指南', currentVersion: 1, status: 'draft', pushStatus: 'not_pushed', pushedTenants: 0, matchedTenants: 12, source: '内部行业研究', summary: '建筑装饰项目售前、施工与验收高频问题。', tags: ['建筑装饰', 'FAQ'], chunkCount: 0, updatedAt: '2026-08-13 10:15', updatedBy: '平台运营-王芳' },
   { id: 'pik_005', title: '低压电器产品选型手册', primaryIndustry: '电子电气', secondaryIndustry: '低压电器', primaryCategory: '行业数据', secondaryCategory: '', contentFormat: '手册', currentVersion: 4, status: 'archived', pushStatus: 'partial', pushedTenants: 4, matchedTenants: 11, source: '产品标准委员会', summary: '低压电器型号、参数、适用场景和选型建议。', tags: ['低压电器', '选型'], chunkCount: 142, updatedAt: '2026-07-28 15:40', updatedBy: '平台管理员' },
 ];
+
+export function registerPlatformIndustryKnowledgeDrafts(payload: { assets: KbAsset[]; chunkRule: string }) {
+  const created: PlatformIndustryKnowledge[] = payload.assets.map(asset => {
+    const [primaryIndustry, secondaryIndustry = ''] = asset.industry.split(' / ');
+    return {
+      id: asset.id, section: asset.section as PlatformKnowledgeSection, connect: '上传文件', title: asset.name,
+      primaryIndustry, secondaryIndustry, primaryCategory: asset.primaryCategory, secondaryCategory: asset.secondaryCategory,
+      contentFormat: asset.contentFormat, processingRule: payload.chunkRule, audience: asset.audience, validityStatus: asset.validityStatus, language: asset.language,
+      currentVersion: 1, status: 'draft', pushStatus: 'not_pushed', pushedTenants: 0, matchedTenants: 0,
+      source: asset.source, sourceRef: asset.sourceRef, summary: asset.summary || '', tags: asset.tags, chunkCount: 0,
+      timeliness: asset.timeliness, enabled: false, createdAt: asset.createdAt, createdBy: asset.createdBy,
+      portalSites: asset.portalSites, updatedAt: asset.updatedAt, updatedBy: '当前平台用户', note: asset.note,
+    };
+  });
+  mockPlatformIndustryKnowledgeData.unshift(...created);
+  console.log('create platform industry knowledge drafts', { ...payload, assets: created });
+}
+
+function syncEnterpriseIndustryLibrary(item: PlatformIndustryKnowledge, status: KnowledgeStatus) {
+  const index = mockIndustryLibrary.findIndex(source => source.id === item.id);
+  if (status !== 'published') {
+    if (index >= 0) mockIndustryLibrary.splice(index, 1);
+    return;
+  }
+  const source: IndustryLibraryItem = {
+    id: item.id, section: item.section || 'industry', industry: item.primaryIndustry, name: item.title,
+    primaryCategory: item.primaryCategory, secondaryCategory: item.secondaryCategory,
+    contentFormat: item.contentFormat, validityStatus: (item.validityStatus || '现行有效') as IndustryLibraryItem['validityStatus'],
+    source: item.source, audience: item.audience, language: item.language,
+    version: item.currentVersion, updatedAt: item.updatedAt, chunks: item.chunkCount,
+  };
+  if (index >= 0) mockIndustryLibrary[index] = source;
+  else mockIndustryLibrary.unshift(source);
+}
+
+function persistPlatformRows(next: PlatformIndustryKnowledge[]) {
+  mockPlatformIndustryKnowledgeData.splice(0, mockPlatformIndustryKnowledgeData.length, ...next);
+  return next;
+}
 
 const mockIndustryKnowledgeVersionsData: IndustryKnowledgeVersion[] = [
   { id: 'ver_001_3', knowledgeId: 'pik_001', version: 3, status: 'current', changeSummary: '补充 2026 年参数修订与测试方法', fileName: 'GB-T18488-2026-v3.pdf', chunkCount: 186, createdAt: '2026-08-12 16:30', createdBy: '平台运营-林岚' },
@@ -138,7 +181,7 @@ const mockTenantPushTargetsData: TenantPushTarget[] = [
 ];
 
 // ACTION: 获取平台行业知识列表 [GET] /api/platform/industry-knowledge
-function handleFetchPlatformIndustryKnowledge(params: { keyword?: string; primaryIndustry?: string; secondaryIndustry?: string; primaryCategory?: string; secondaryCategory?: string; contentFormat?: string; validityStatus?: string; timeliness?: string; audience?: string; language?: string; tag?: string; status?: string; page?: number; pageSize?: number }) {
+function handleFetchPlatformIndustryKnowledge(params: { keyword?: string; section?: string; primaryIndustry?: string; secondaryIndustry?: string; primaryCategory?: string; secondaryCategory?: string; contentFormat?: string; validityStatus?: string; timeliness?: string; audience?: string; language?: string; tag?: string; status?: string; page?: number; pageSize?: number }) {
   console.log('fetch platform industry knowledge', params);
 }
 
@@ -202,13 +245,14 @@ function handleBatchUpdatePlatformIndustryKnowledgeMetadata(payload: { ids: stri
   console.log('batch update platform industry knowledge metadata', payload);
 }
 
-const emptyDraft = (): KnowledgeDraft => ({ title: '', primaryIndustry: '', secondaryIndustry: '', primaryCategory: '', secondaryCategory: '', contentFormat: '报告', audience: '企业内部', validityStatus: '现行有效', language: '简体中文', source: '', summary: '', tags: '', fileName: '', timeliness: '静态', enabled: false, folderId: '', portalSites: [], note: '', sourceRef: '', customFields: {} });
+const emptyDraft = (): KnowledgeDraft => ({ title: '', section: 'industry', primaryIndustry: '', secondaryIndustry: '', primaryCategory: '', secondaryCategory: '', contentFormat: '报告', audience: '企业内部', validityStatus: '现行有效', language: '简体中文', source: '', summary: '', tags: '', fileName: '', timeliness: '静态', enabled: false, folderId: '', portalSites: [], note: '', sourceRef: '', customFields: {} });
 
 export default function IndustryKnowledgePlatformPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [rows, setRows] = useState(mockPlatformIndustryKnowledgeData);
   const [keyword, setKeyword] = useState('');
+  const [sectionFilter, setSectionFilter] = useState('all');
   const [primaryIndustryFilter, setPrimaryIndustryFilter] = useState('all');
   const [secondaryIndustryFilter, setSecondaryIndustryFilter] = useState('all');
   const [primaryCategoryFilter, setPrimaryCategoryFilter] = useState('all');
@@ -236,6 +280,7 @@ export default function IndustryKnowledgePlatformPage() {
 
   const filtered = useMemo(() => rows.filter((item) =>
     (!keyword || `${item.title}${item.source}${item.tags.join('')}`.toLowerCase().includes(keyword.toLowerCase())) &&
+    (sectionFilter === 'all' || (item.section || 'industry') === sectionFilter) &&
     (primaryIndustryFilter === 'all' || item.primaryIndustry === primaryIndustryFilter) &&
     (secondaryIndustryFilter === 'all' || item.secondaryIndustry === secondaryIndustryFilter) &&
     (primaryCategoryFilter === 'all' || item.primaryCategory === primaryCategoryFilter) &&
@@ -246,18 +291,17 @@ export default function IndustryKnowledgePlatformPage() {
     (audienceFilter === 'all' || (item.audience || '企业内部') === audienceFilter) &&
     (languageFilter === 'all' || (item.language || '简体中文') === languageFilter) &&
     (!tagFilter || item.tags.some((tag) => tag.toLowerCase().includes(tagFilter.toLowerCase()))) &&
-    (statusFilter === 'all' || item.status === statusFilter)), [rows, keyword, primaryIndustryFilter, secondaryIndustryFilter, primaryCategoryFilter, secondaryCategoryFilter, contentFormatFilter, validityStatusFilter, timelinessFilter, audienceFilter, languageFilter, tagFilter, statusFilter]);
+    (statusFilter === 'all' || item.status === statusFilter)), [rows, keyword, sectionFilter, primaryIndustryFilter, secondaryIndustryFilter, primaryCategoryFilter, secondaryCategoryFilter, contentFormatFilter, validityStatusFilter, timelinessFilter, audienceFilter, languageFilter, tagFilter, statusFilter]);
   const publishedCount = rows.filter((item) => item.status === 'published').length;
   const pendingPushCount = rows.filter((item) => item.status === 'published' && item.pushStatus !== 'synced').length;
   const pushedTenantCount = new Set(mockTenantPushTargetsData.filter((item) => item.currentVersion !== null).map((item) => item.tenantId)).size;
   const secondaryIndustries = secondaryIndustriesOf(draft.primaryIndustry);
   const secondaryCategories = draft.primaryCategory === '标准规范' ? ['国家标准', '行业标准'] : draft.primaryCategory === '政策法规' ? ['国家政策', '地方政策', '行业政策'] : [];
   const selectedItems = rows.filter((item) => selectedIds.has(item.id));
+  const batchContentFormatEditable = selectedItems.every(item => (item.section || 'industry') === 'industry' || item.section === 'document');
   const selectedAllDraft = selectedItems.length > 0 && selectedItems.every((item) => item.status === 'draft');
   const selectedAllPublished = selectedItems.length > 0 && selectedItems.every((item) => item.status === 'published');
   const selectedAllArchived = selectedItems.length > 0 && selectedItems.every((item) => item.status === 'archived');
-  const industrySection = SECTION_MAP.industry;
-  const inheritedChunkRule = mockExtraChunkRules.industry?.find((rule) => rule.contentFormat === draft.contentFormat) || generalChunkRule(industrySection);
 
   useEffect(() => {
     const editId = searchParams.get('edit');
@@ -273,12 +317,12 @@ export default function IndustryKnowledgePlatformPage() {
   }, [detailItem, navigate]);
 
   function fetchWith(next: Partial<Parameters<typeof handleFetchPlatformIndustryKnowledge>[0]>) {
-    handleFetchPlatformIndustryKnowledge({ keyword, primaryIndustry: primaryIndustryFilter, secondaryIndustry: secondaryIndustryFilter, primaryCategory: primaryCategoryFilter, secondaryCategory: secondaryCategoryFilter, contentFormat: contentFormatFilter, validityStatus: validityStatusFilter, timeliness: timelinessFilter, audience: audienceFilter, language: languageFilter, tag: tagFilter, status: statusFilter, page: 1, pageSize: 20, ...next });
+    handleFetchPlatformIndustryKnowledge({ keyword, section: sectionFilter, primaryIndustry: primaryIndustryFilter, secondaryIndustry: secondaryIndustryFilter, primaryCategory: primaryCategoryFilter, secondaryCategory: secondaryCategoryFilter, contentFormat: contentFormatFilter, validityStatus: validityStatusFilter, timeliness: timelinessFilter, audience: audienceFilter, language: languageFilter, tag: tagFilter, status: statusFilter, page: 1, pageSize: 20, ...next });
   }
   function openCreate(item?: PlatformIndustryKnowledge) {
     if (item) {
       setEditingId(item.id);
-      setDraft({ title: item.title, primaryIndustry: item.primaryIndustry, secondaryIndustry: item.secondaryIndustry, primaryCategory: item.primaryCategory, secondaryCategory: item.secondaryCategory, contentFormat: item.contentFormat, audience: item.audience || '企业内部', validityStatus: item.validityStatus || '现行有效', language: item.language || '简体中文', source: item.source, summary: item.summary, tags: item.tags.join('、'), fileName: '', timeliness: item.timeliness || '静态', enabled: item.enabled ?? item.status === 'published', folderId: item.folderId || '', portalSites: item.portalSites || [], note: item.note || '', sourceRef: item.sourceRef || item.source, customFields: item.customFields || {} });
+      setDraft({ title: item.title, section: item.section || 'industry', primaryIndustry: item.primaryIndustry, secondaryIndustry: item.secondaryIndustry, primaryCategory: item.primaryCategory, secondaryCategory: item.secondaryCategory, contentFormat: item.contentFormat, audience: item.audience || '企业内部', validityStatus: item.validityStatus || '现行有效', language: item.language || '简体中文', source: item.source, summary: item.summary, tags: item.tags.join('、'), fileName: '', timeliness: item.timeliness || '静态', enabled: item.enabled ?? item.status === 'published', folderId: item.folderId || '', portalSites: item.portalSites || [], note: item.note || '', sourceRef: item.sourceRef || item.source, customFields: item.customFields || {} });
     } else { setEditingId(null); setDraft(emptyDraft()); }
     setCommonEditOpen(true);
   }
@@ -287,10 +331,12 @@ export default function IndustryKnowledgePlatformPage() {
     if (publish && !draft.fileName) { alert('发布行业知识前请先上传原始文件'); return; }
     if (editingId) {
       handleUpdatePlatformIndustryKnowledge({ id: editingId, form: draft });
-      setRows((prev) => prev.map((item) => item.id === editingId ? { ...item, ...draft, tags: draft.tags.split(/[、,，]/).filter(Boolean), status: publish ? 'published' : item.status, updatedAt: '2026-08-13 15:30', updatedBy: '当前平台用户' } : item));
+      const current = rows.find(item => item.id === editingId);
+      if (current) syncEnterpriseIndustryLibrary({ ...current, ...draft, tags: draft.tags.split(/[、,，]/).filter(Boolean) }, publish ? 'published' : current.status);
+      setRows((prev) => persistPlatformRows(prev.map((item) => item.id === editingId ? { ...item, ...draft, tags: draft.tags.split(/[、,，]/).filter(Boolean), status: publish ? 'published' : item.status, updatedAt: '2026-08-13 15:30', updatedBy: '当前平台用户' } : item)));
     } else {
       handleCreatePlatformIndustryKnowledge(draft);
-      setRows((prev) => [{ id: `pik_${Date.now()}`, ...draft, tags: draft.tags.split(/[、,，]/).filter(Boolean), currentVersion: 1, status: publish ? 'published' : 'draft', pushStatus: 'not_pushed', pushedTenants: 0, matchedTenants: 0, chunkCount: publish ? 1 : 0, updatedAt: '2026-08-13 15:30', updatedBy: '当前平台用户' }, ...prev]);
+      setRows((prev) => persistPlatformRows([{ id: `pik_${Date.now()}`, ...draft, tags: draft.tags.split(/[、,，]/).filter(Boolean), currentVersion: 1, status: publish ? 'published' : 'draft', pushStatus: 'not_pushed', pushedTenants: 0, matchedTenants: 0, chunkCount: publish ? 1 : 0, updatedAt: '2026-08-13 15:30', updatedBy: '当前平台用户' }, ...prev]));
     }
     setCommonEditOpen(false);
   }
@@ -313,7 +359,8 @@ export default function IndustryKnowledgePlatformPage() {
   function archive(item: PlatformIndustryKnowledge) {
     if (!confirm(`确认下线「${item.title}」？企业已经导入的独立知识不受影响。`)) return;
     handleArchivePlatformIndustryKnowledge(item.id);
-    setRows((prev) => prev.map((row) => row.id === item.id ? { ...row, status: 'archived' } : row));
+    syncEnterpriseIndustryLibrary(item, 'archived');
+    setRows((prev) => persistPlatformRows(prev.map((row) => row.id === item.id ? { ...row, status: 'archived' } : row)));
   }
   function toggleEnabled(item: PlatformIndustryKnowledge, enabled: boolean) {
     handleTogglePlatformIndustryKnowledge({ id: item.id, enabled });
@@ -328,7 +375,8 @@ export default function IndustryKnowledgePlatformPage() {
   function batchStatus(status: KnowledgeStatus) {
     const ids = Array.from(selectedIds);
     handleBatchPlatformIndustryKnowledgeStatus({ ids, status });
-    setRows((prev) => prev.map((item) => selectedIds.has(item.id) ? { ...item, status, enabled: status === 'published' ? item.enabled : false } : item));
+    selectedItems.forEach(item => syncEnterpriseIndustryLibrary(item, status));
+    setRows((prev) => persistPlatformRows(prev.map((item) => selectedIds.has(item.id) ? { ...item, status, enabled: status === 'published' ? item.enabled : false } : item)));
     setSelectedIds(new Set());
   }
   function batchToggle(enabled: boolean) {
@@ -354,6 +402,7 @@ export default function IndustryKnowledgePlatformPage() {
     setSelectedIds(new Set());
   }
   function toggleBatchEditField(field: BatchEditField) {
+    if (field === 'contentFormat' && !batchContentFormatEditable) return;
     setBatchEditFields((prev) => { const next = new Set(prev); next.has(field) ? next.delete(field) : next.add(field); return next; });
   }
   function applyBatchEdit() {
@@ -374,7 +423,8 @@ export default function IndustryKnowledgePlatformPage() {
   }
   function transitionOne(item: PlatformIndustryKnowledge, status: KnowledgeStatus) {
     handleBatchPlatformIndustryKnowledgeStatus({ ids: [item.id], status });
-    setRows((prev) => prev.map((row) => row.id === item.id ? { ...row, status, enabled: status === 'published' ? row.enabled : false } : row));
+    syncEnterpriseIndustryLibrary(item, status);
+    setRows((prev) => persistPlatformRows(prev.map((row) => row.id === item.id ? { ...row, status, enabled: status === 'published' ? row.enabled : false } : row)));
   }
   function deleteOne(item: PlatformIndustryKnowledge) {
     if (!confirm(`删除「${item.title}」？`)) return;
@@ -403,6 +453,7 @@ export default function IndustryKnowledgePlatformPage() {
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
         <div className="flex flex-wrap items-center gap-2 border-t border-b bg-gray-50/60 px-4 py-3">
+          <Select value={sectionFilter} onValueChange={(value) => { setSectionFilter(value); fetchWith({ section: value }); }}><SelectTrigger className="w-32 bg-white"><SelectValue placeholder="知识板块" /></SelectTrigger><SelectContent><SelectItem value="all">全部知识板块</SelectItem>{(Object.keys(BOARD_LABELS) as PlatformKnowledgeSection[]).map((section) => <SelectItem key={section} value={section}>{BOARD_LABELS[section]}</SelectItem>)}</SelectContent></Select>
           <Select value={primaryCategoryFilter} onValueChange={(value) => { setPrimaryCategoryFilter(value); setSecondaryCategoryFilter('all'); fetchWith({ primaryCategory: value, secondaryCategory: 'all' }); }}><SelectTrigger className="w-32 bg-white"><SelectValue placeholder="一级分类" /></SelectTrigger><SelectContent><SelectItem value="all">全部一级分类</SelectItem>{PRIMARY_CATEGORIES['行业知识库'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
           <Select value={secondaryCategoryFilter} onValueChange={(value) => { setSecondaryCategoryFilter(value); fetchWith({ secondaryCategory: value }); }}><SelectTrigger className="w-32 bg-white"><SelectValue placeholder="二级分类" /></SelectTrigger><SelectContent><SelectItem value="all">全部二级分类</SelectItem>{Array.from(new Set(rows.map((item) => item.secondaryCategory).filter(Boolean))).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
           <Select value={contentFormatFilter} onValueChange={(value) => { setContentFormatFilter(value); fetchWith({ contentFormat: value }); }}><SelectTrigger className="w-32 bg-white"><SelectValue placeholder="内容形式" /></SelectTrigger><SelectContent><SelectItem value="all">全部内容形式</SelectItem>{CONTENT_FORMATS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
@@ -411,7 +462,7 @@ export default function IndustryKnowledgePlatformPage() {
           <Select value={audienceFilter} onValueChange={(value) => { setAudienceFilter(value); fetchWith({ audience: value }); }}><SelectTrigger className="w-32 bg-white"><SelectValue placeholder="适用对象" /></SelectTrigger><SelectContent><SelectItem value="all">全部适用对象</SelectItem>{AUDIENCE_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
           <Select value={languageFilter} onValueChange={(value) => { setLanguageFilter(value); fetchWith({ language: value }); }}><SelectTrigger className="w-28 bg-white"><SelectValue placeholder="语言" /></SelectTrigger><SelectContent><SelectItem value="all">全部语言</SelectItem>{LANGUAGE_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select>
           <Input className="w-36 bg-white" value={tagFilter} onChange={(event) => { setTagFilter(event.target.value); fetchWith({ tag: event.target.value }); }} placeholder="标签" />
-          <Button size="sm" variant="outline" onClick={() => { setPrimaryCategoryFilter('all'); setSecondaryCategoryFilter('all'); setContentFormatFilter('all'); setValidityStatusFilter('all'); setTimelinessFilter('all'); setAudienceFilter('all'); setLanguageFilter('all'); setTagFilter(''); }}>重置</Button>
+          <Button size="sm" variant="outline" onClick={() => { setSectionFilter('all'); setPrimaryCategoryFilter('all'); setSecondaryCategoryFilter('all'); setContentFormatFilter('all'); setValidityStatusFilter('all'); setTimelinessFilter('all'); setAudienceFilter('all'); setLanguageFilter('all'); setTagFilter(''); }}>重置</Button>
         </div>
         <div className="flex items-center justify-between px-4 py-2">
           <span className="text-xs text-gray-400">共 {filtered.length} 条</span>
@@ -433,9 +484,9 @@ export default function IndustryKnowledgePlatformPage() {
             const healthLabel = item.status === 'draft' ? '未评估' : item.status === 'archived' ? '已失效' : (item.health ?? 85) >= 80 ? '健康' : '需优化';
             return <TableRow key={item.id} className={selectedIds.has(item.id) ? 'bg-blue-50' : ''}>
               <TableCell><input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelected(item.id)} /></TableCell>
-              <TableCell className="min-w-[220px]"><button className="text-left font-medium text-blue-600 hover:underline" onClick={() => setDetailItem(item)}>{item.title}</button><div className="mt-1 text-xs text-gray-400">{item.source} · {item.chunkCount} 个切片</div></TableCell>
+              <TableCell className="min-w-[220px]"><button className="text-left font-medium text-blue-600 hover:underline" onClick={() => setDetailItem(item)}>{item.title}</button><div className="mt-1 text-xs text-gray-400">{item.source} · {item.chunkCount} {item.section === 'structured' ? '条记录' : item.section === 'faq' ? '条问答' : '个切片'}</div></TableCell>
               <TableCell><Badge className={STATUS_CONFIG[item.status].cls}>{STATUS_CONFIG[item.status].label}</Badge></TableCell>
-              <TableCell><Badge className="bg-violet-50 text-violet-700">行业知识</Badge></TableCell>
+              <TableCell><Badge className="bg-violet-50 text-violet-700">{BOARD_LABELS[item.section || 'industry']}</Badge></TableCell>
               <TableCell className="min-w-[120px]"><div>{item.primaryIndustry}</div><div className="text-xs text-gray-400">{item.secondaryIndustry}</div></TableCell>
               <TableCell className="text-xs">行业知识库</TableCell><TableCell className="text-xs">{item.primaryCategory}</TableCell><TableCell className="text-xs">{item.secondaryCategory || '未指定'}</TableCell>
               <TableCell><Badge className="bg-blue-50 text-blue-600">{item.contentFormat}</Badge></TableCell><TableCell className="text-xs">{item.validityStatus || '现行有效'}</TableCell><TableCell className="text-xs">{item.timeliness || '静态'}</TableCell><TableCell className="text-xs">{item.audience || '企业内部'}</TableCell>
@@ -455,12 +506,12 @@ export default function IndustryKnowledgePlatformPage() {
         <DialogHeader><DialogTitle>编辑知识资产</DialogTitle></DialogHeader>
         <div className="grid grid-cols-2 gap-4">
           <label className="col-span-2 space-y-1 text-sm"><span>知识名称 *</span><Input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-          <label className="space-y-1 text-sm"><span>知识板块</span><Input value="行业知识" disabled /></label><label className="space-y-1 text-sm"><span>来源方式</span><Input value="平台" disabled /></label>
+          <label className="space-y-1 text-sm"><span>知识板块</span><Input value={BOARD_LABELS[draft.section]} disabled /></label><label className="space-y-1 text-sm"><span>来源方式</span><Input value={rows.find(item => item.id === editingId)?.connect || '平台'} disabled /></label>
           <label className="space-y-1 text-sm"><span>一级行业 *</span><Select value={draft.primaryIndustry} onValueChange={(value) => setDraft({ ...draft, primaryIndustry: value, secondaryIndustry: '' })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{INDUSTRY_TREE.map((item) => <SelectItem key={item.primary} value={item.primary}>{item.primary}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span>二级行业 *</span><Select value={draft.secondaryIndustry} onValueChange={(value) => setDraft({ ...draft, secondaryIndustry: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{secondaryIndustries.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span>知识库类型</span><Input value="行业知识库" disabled /></label><label className="space-y-1 text-sm"><span>一级分类 *</span><Select value={draft.primaryCategory} onValueChange={(value) => setDraft({ ...draft, primaryCategory: value, secondaryCategory: '' })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PRIMARY_CATEGORIES['行业知识库'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span>二级分类</span><Select value={draft.secondaryCategory || 'unspecified'} onValueChange={(value) => setDraft({ ...draft, secondaryCategory: value === 'unspecified' ? '' : value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="unspecified">未指定</SelectItem>{secondaryCategories.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
-          <label className="space-y-1 text-sm"><span>内容形式</span><Select value={draft.contentFormat} onValueChange={(value) => setDraft({ ...draft, contentFormat: value as ContentFormat })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CONTENT_FORMATS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
+          <label className="space-y-1 text-sm"><span>内容形式</span><Select value={draft.contentFormat} disabled={draft.section === 'faq' || draft.section === 'structured'} onValueChange={(value) => setDraft({ ...draft, contentFormat: value as ContentFormat })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{(draft.section === 'faq' ? ['问答对'] : draft.section === 'structured' ? ['结构化记录'] : KB_CONTENT_FORMATS).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span>适用对象</span><Select value={draft.audience} onValueChange={(value) => setDraft({ ...draft, audience: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{AUDIENCE_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span>有效状态</span><Select value={draft.validityStatus} onValueChange={(value) => setDraft({ ...draft, validityStatus: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VALIDITY_STATUSES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span>语言</span><Select value={draft.language} onValueChange={(value) => setDraft({ ...draft, language: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{LANGUAGE_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
@@ -482,7 +533,7 @@ export default function IndustryKnowledgePlatformPage() {
           <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('folderId')} onChange={() => toggleBatchEditField('folderId')} />知识目录</span><Input disabled={!batchEditFields.has('folderId')} value={batchEditDraft.folderId} onChange={(event) => setBatchEditDraft({ ...batchEditDraft, folderId: event.target.value })} placeholder="未指定" /></label>
           <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('primaryCategory')} onChange={() => toggleBatchEditField('primaryCategory')} />一级分类</span><Select disabled={!batchEditFields.has('primaryCategory')} value={batchEditDraft.primaryCategory} onValueChange={(value) => setBatchEditDraft({ ...batchEditDraft, primaryCategory: value, secondaryCategory: '' })}><SelectTrigger><SelectValue placeholder="请选择" /></SelectTrigger><SelectContent>{PRIMARY_CATEGORIES['行业知识库'].map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('secondaryCategory')} onChange={() => toggleBatchEditField('secondaryCategory')} />二级分类</span><Input disabled={!batchEditFields.has('secondaryCategory')} value={batchEditDraft.secondaryCategory} onChange={(event) => setBatchEditDraft({ ...batchEditDraft, secondaryCategory: event.target.value })} placeholder="未指定" /></label>
-          <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('contentFormat')} onChange={() => toggleBatchEditField('contentFormat')} />内容形式</span><Select disabled={!batchEditFields.has('contentFormat')} value={batchEditDraft.contentFormat} onValueChange={(value) => setBatchEditDraft({ ...batchEditDraft, contentFormat: value as ContentFormat })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{CONTENT_FORMATS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
+          <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('contentFormat')} disabled={!batchContentFormatEditable} onChange={() => toggleBatchEditField('contentFormat')} />内容形式</span><Select disabled={!batchEditFields.has('contentFormat') || !batchContentFormatEditable} value={batchEditDraft.contentFormat} onValueChange={(value) => setBatchEditDraft({ ...batchEditDraft, contentFormat: value as ContentFormat })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{KB_CONTENT_FORMATS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('validityStatus')} onChange={() => toggleBatchEditField('validityStatus')} />有效状态</span><Select disabled={!batchEditFields.has('validityStatus')} value={batchEditDraft.validityStatus} onValueChange={(value) => setBatchEditDraft({ ...batchEditDraft, validityStatus: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{VALIDITY_STATUSES.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('timeliness')} onChange={() => toggleBatchEditField('timeliness')} />时效</span><Select disabled={!batchEditFields.has('timeliness')} value={batchEditDraft.timeliness} onValueChange={(value) => setBatchEditDraft({ ...batchEditDraft, timeliness: value as Timeliness })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{TIMELINESS_OPTS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
           <label className="space-y-1 text-sm"><span className="flex items-center gap-2"><input type="checkbox" checked={batchEditFields.has('audience')} onChange={() => toggleBatchEditField('audience')} />适用对象</span><Select disabled={!batchEditFields.has('audience')} value={batchEditDraft.audience} onValueChange={(value) => setBatchEditDraft({ ...batchEditDraft, audience: value })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{AUDIENCE_OPTIONS.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></label>
@@ -499,7 +550,7 @@ export default function IndustryKnowledgePlatformPage() {
         <div className="rounded border p-3">
           <div className="text-sm font-medium">发布新版本</div>
           <div className="mt-3 grid grid-cols-2 gap-3">
-            <label className="space-y-1 text-sm"><span>版本文件 *</span><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md" onChange={(event) => setVersionFile(event.target.files?.[0]?.name || '')} /></label>
+            <label className="space-y-1 text-sm"><span>版本文件 *</span><Input type="file" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.jpg,.jpeg,.png" onChange={(event) => setVersionFile(event.target.files?.[0]?.name || '')} /></label>
             <label className="space-y-1 text-sm"><span>版本说明 *</span><Input value={versionSummary} onChange={(event) => setVersionSummary(event.target.value)} placeholder="说明本次更新内容" /></label>
           </div>
           <div className="mt-2 text-xs text-amber-600">发布后按行业知识板块配置重新处理；企业后续导入当前内容，已导入的企业独立知识不会被自动覆盖。</div>

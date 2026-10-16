@@ -1,0 +1,9 @@
+{
+  "page": "StructuredIntake",
+  "dataSources": [
+    { "name": "mockStructuredSitesData", "shape": "array", "endpoint": { "method": "GET", "path": "/api/kb/portal-sites" } }
+  ],
+  "actions": [
+    { "handler": "handleFetchStructuredSources", "endpoint": { "method": "GET", "path": "/api/kb/structured-sources" }, "requestFrom": "param", "responseShape": "array" }
+  ]
+}

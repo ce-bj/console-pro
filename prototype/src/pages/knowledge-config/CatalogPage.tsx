@@ -1280,11 +1280,11 @@ export default function CatalogPage() {
         knowledgeBaseType: '行业知识库', industry: item.industry, primaryCategory: item.primaryCategory,
         secondaryCategory: item.secondaryCategory, contentFormat: item.contentFormat, validityStatus: item.validityStatus,
         audience: '企业内部', language: item.language,
-      }, 'industry');
+      }, item.section || 'industry');
       const existing = rows.find((r) => r.industrySourceId === item.id);
       if (!existing) {
         news.push({
-          ...newDraftAsset(item.name, 'industry', '平台', metadata, undefined, undefined, folderId),
+          ...newDraftAsset(item.name, item.section || 'industry', '平台', metadata, undefined, undefined, folderId),
           source: item.source,
           industrySourceId: item.id, chunks: item.chunks, sync: '手动', freq: '不自动更新', nextSync: '—',
           status: 'draft', sourceRef: `平台行业知识 · ${item.name}`,

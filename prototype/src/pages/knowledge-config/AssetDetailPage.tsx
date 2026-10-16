@@ -11,7 +11,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import {
-  SECTION_MAP, CONNECT_CLS, mockPortalSites,
+  SECTION_MAP, CONNECT_CLS, mockPortalSites, mockAssets,
   mockAssetChunks, mockRawContent, mockCallLogs, healthSuggestion, evaluateGates, HealthBreakdown,
   AssetChunk, CHUNK_TYPES, mockAssetHistory, KbAsset, KbStatus,
   computeHealthBreakdown, computeHealth, mockHealthWeights, effectiveStatus, TODAY, mockCustomSchemaFields,
@@ -21,13 +21,14 @@ import { SectionTag, StatusActions, HealthValue, MetricBar } from './shared';
 import { mockPlatformIndustryKnowledgeData, PlatformIndustryKnowledge } from '../N14-IndustryKnowledgePlatformPage';
 import StructuredRecords from './StructuredRecords';
 import KnowledgeFilePreview from './KnowledgeFilePreview';
+import { mockSourceConnectionsData } from './sourceConnections';
 import ReplaceKnowledgeFile from './ReplaceKnowledgeFile';
 import ChipAdder from './ChipAdder';
 import ProfileReturnBanner from './ProfileReturnBanner';
 
 function platformIndustryToAsset(item: PlatformIndustryKnowledge): KbAsset {
   return {
-    id: item.id, name: item.title, section: 'industry', connect: '平台', knowledgeBaseType: '行业知识库',
+    id: item.id, name: item.title, section: item.section || 'industry', connect: item.connect || '平台', knowledgeBaseType: '行业知识库',
     industry: `${item.primaryIndustry} / ${item.secondaryIndustry}`,
     primaryCategory: item.primaryCategory, secondaryCategory: item.secondaryCategory, contentFormat: item.contentFormat,
     validityStatus: (item.validityStatus || '现行有效') as KbAsset['validityStatus'], source: item.source,
@@ -89,6 +90,10 @@ export default function AssetDetailPage() {
 
   if (!asset) return <Navigate to={platformMode ? '/platform/industry-knowledge' : '/knowledge-config/catalog'} replace />;
   const a = asset;
+  const companion = a.connect === '后台页面' && a.ingestGroupId && (a.section === 'content' || a.section === 'structured')
+    ? mockAssets.find(item => item.id !== a.id && item.ingestGroupId === a.ingestGroupId && item.section === (a.section === 'content' ? 'structured' : 'content'))
+    : undefined;
+  const connection = mockSourceConnectionsData.find(source => source.section === a.section && source.sourceId === (a.frontendPageId || a.backendPageId));
   const shownStatus = effectiveStatus(a);
   const sec = SECTION_MAP[a.section];
   const appliedChunkRule = resolveChunkRule(sec, a.contentFormat);
@@ -291,14 +296,14 @@ export default function AssetDetailPage() {
       </Card>
 
       {/* 来源更新状态（自动机制只读展示；人工刷新统一使用“重新学习”） */}
-      {a.sync && (
+      {(a.sync || connection) && (
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">来源更新状态</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-4 gap-4 text-sm">
-              <div><div className="text-xs text-gray-400">同步方式</div><div className="mt-1 text-gray-700">{a.sync} <span className="text-gray-400">· {a.freq}</span></div></div>
-              <div><div className="text-xs text-gray-400">上次同步</div><div className="mt-1 text-gray-700">{a.lastSync}</div></div>
-              <div><div className="text-xs text-gray-400">下次同步</div><div className="mt-1 text-gray-700">{a.nextSync}</div></div>
+              <div><div className="text-xs text-gray-400">同步方式</div><div className="mt-1 text-gray-700">{connection ? '定时更新' : a.sync} <span className="text-gray-400">· {connection ? '每日 00:00' : a.freq}</span></div></div>
+              <div><div className="text-xs text-gray-400">上次同步</div><div className="mt-1 text-gray-700">{connection?.lastSync || a.lastSync}</div></div>
+              <div><div className="text-xs text-gray-400">下次同步</div><div className="mt-1 text-gray-700">{connection ? connection.status === 'paused' ? '已关闭使用' : connection.autoUpdate ? '每日 00:00' : '定时更新已关闭' : a.nextSync}</div></div>
               <div>
                 <div className="text-xs text-gray-400">状态</div>
                 <div className="mt-1">
@@ -313,7 +318,6 @@ export default function AssetDetailPage() {
       )}
 
       {/* 内容：原文（左） + 解析切片（右，可筛选/勾选/点击编辑/批量操作） */}
-      {a.section === 'structured' && <Card><CardHeader className="pb-2"><CardTitle className="text-sm">知识文件</CardTitle></CardHeader><CardContent><KnowledgeFilePreview key={a.id + a.sourceRef} asset={a} /></CardContent></Card>}
       {replaceOpen && <ReplaceKnowledgeFile asset={a} onClose={() => setReplaceOpen(false)} onSaved={next => setAsset(next)} />}
       <Card>
         <CardHeader className="pb-2">
@@ -322,7 +326,7 @@ export default function AssetDetailPage() {
         </CardHeader>
         <CardContent>
           {a.section === 'structured' ? (
-            a.replacementPending ? <p className="text-sm text-amber-700">新文件等待解析与学习，完成后更新记录。原有人工标签与启停将在匹配后保留。</p> : <StructuredRecords key={a.id} asset={a} onAssetChange={next => { upsertKnowledgeAsset(next); setAsset(next); }} />
+            a.replacementPending ? <p className="text-sm text-amber-700">新文件等待解析与学习，完成后更新表格。</p> : <StructuredRecords key={a.id} asset={a} onAssetChange={next => { upsertKnowledgeAsset(next); setAsset(next); }} />
           ) : a.replacementPending ? (
             <KnowledgeFilePreview key={a.id + a.sourceRef} asset={a} />
           ) : chunks.length === 0 ? (
@@ -379,6 +383,20 @@ export default function AssetDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {companion && <Card>
+        <CardHeader className="pb-2 flex-row items-center justify-between">
+          <div><CardTitle className="text-sm">{companion.section === 'structured' ? '结构化数据记录' : '内容切片'}</CardTitle><p className="mt-1 text-xs text-gray-500">同一后台来源接入的另一种知识处理方式</p></div>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/knowledge-config/catalog/${companion.id}`)}>查看该知识资产</Button>
+        </CardHeader>
+        <CardContent>
+          {companion.section === 'structured' ? <StructuredRecords key={companion.id} asset={companion} onAssetChange={upsertKnowledgeAsset} />
+            : mockAssetChunks[companion.id]?.length ? <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <KnowledgeFilePreview asset={companion} />
+              <div className="space-y-2">{mockAssetChunks[companion.id].map(chunk => <div key={chunk.id} className="rounded border p-3 text-sm"><div className="mb-1 flex items-center gap-2"><Badge className="bg-blue-50 text-blue-700">切片 #{chunk.index}</Badge><span className="text-xs text-gray-500">{chunk.type}</span></div><p className="text-gray-700">{chunk.text}</p></div>)}</div>
+            </div> : <p className="text-sm text-gray-500">该来源的内容资产尚未学习完成，完成后在这里展示切片。</p>}
+        </CardContent>
+      </Card>}
 
       {/* 入库前门禁检查（架构 §6.1/§6.1.1） */}
       <Card>

@@ -1,4 +1,4 @@
-import { CONNECTION_ACTIONS, ConnectionBatchAction, canRunConnectionAction } from './connectionActions';
+import { CONNECTION_ACTIONS, ConnectionBatchAction, canRunConnectionAction, canSyncNewBackendRecords } from './connectionActions';
 import { useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import ProfileReturnBanner from './ProfileReturnBanner';
@@ -18,24 +18,22 @@ import {
 } from './data';
 import { HealthValue, PageHeader, SectionTag } from './shared';
 import {
-  SourceConnection, SourceFrequency, mockSourceConnectionsData, sourceAssets, handlePauseSource,
+  SourceConnection, mockSourceConnectionsData, sourceAssets, handlePauseSource,
 } from './sourceConnections';
 
 const mockSourceConnectionsPageData = mockSourceConnectionsData;
 const mockKnowledgeUpdatesData = mockAssets;
 const SOURCE_STATUS = {
   active: { label: '正常', cls: 'bg-green-50 text-green-700' },
-  pending: { label: '待手动更新', cls: 'bg-amber-50 text-amber-700' },
+  pending: { label: '待更新', cls: 'bg-amber-50 text-amber-700' },
   syncing: { label: '同步中', cls: 'bg-blue-50 text-blue-700' },
   failed: { label: '同步失败', cls: 'bg-red-50 text-red-600' },
   paused: { label: '已关闭使用', cls: 'bg-gray-100 text-gray-600' },
 };
-const FREQUENCIES: SourceFrequency[] = ['实时', '每小时', '每日', '每周'];
-const FREQUENCY_LABELS: Record<SourceFrequency, string> = { 实时: '实时 · 发现即处理', 每小时: '每小时 · 整点', 每日: '每日 · 00:00', 每周: '每周一 · 00:00' };
 const GUIDE: Record<SectionKey, [string, string]> = {
   document: ['更新文档', '原文过期请更新文档；局部问题可编辑切片'],
   faq: ['编辑问答', '核对标准答案、相似问法与适用范围'],
-  content: ['管理接入来源', '在来源栏目修正正文，内容发布后实时同步'],
+  content: ['管理接入来源', '在来源栏目修改内容，每日 00:00 更新'],
   structured: ['检查数据来源', '核对业务字段、缺失值及数据新鲜度'],
   web: ['检查网址与正文', '检查网址可访问性；来源改变后重新抓取'],
   industry: ['编辑行业资料', '核对资料有效性，平台导入内容不会自动覆盖'],
@@ -48,12 +46,8 @@ function handleFetchSourceConnections(params: { keyword?: string; section?: stri
 // ACTION: 获取知识更新列表 [GET] /api/kb/assets/updates
 function handleFetchKnowledgeUpdates(params: { keyword?: string; section?: string }) { console.log('fetch knowledge updates', params); }
 
-function nextSyncLabel(frequency: SourceFrequency, enabled: boolean): string {
-  if (!enabled) return '自动更新已关闭';
-  if (frequency === '实时') return '检测到新增 / 删除时';
-  if (frequency === '每小时') return '下个整点';
-  if (frequency === '每日') return '每日 00:00';
-  return '下周一 00:00';
+function nextSyncLabel(enabled: boolean): string {
+  return enabled ? '每日 00:00' : '定时更新已关闭';
 }
 
 export default function ConnectionUpdatesPage() {
@@ -75,7 +69,6 @@ export default function ConnectionUpdatesPage() {
   const [detecting, setDetecting] = useState<string[]>([]);
   const detectingRef = useRef(new Set<string>());
   const [batchAction, setBatchAction] = useState<ConnectionBatchAction>('detect');
-  const [batchFrequency, setBatchFrequency] = useState<SourceFrequency>('每日');
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
   const [scores, setScores] = useState<Record<string, number>>({});
@@ -92,7 +85,8 @@ export default function ConnectionUpdatesPage() {
   );
 
   const selectedSourceRows = sources.filter(s => selectedSources.includes(s.id));
-  const batchEligible = selectedSourceRows.filter(s => canRunConnectionAction(s.status, batchAction, detecting.includes(s.id)));
+  const eligible = (s: SourceConnection, action: ConnectionBatchAction) => action === 'sync' ? canSyncNewBackendRecords(s, detectingRef.current.has(s.id)) : canRunConnectionAction(s.status, action, detectingRef.current.has(s.id));
+  const batchEligible = selectedSourceRows.filter(s => eligible(s, batchAction));
   const toggleSelection = (ids: string[], id: string) => ids.includes(id) ? ids.filter(v => v !== id) : [...ids, id];
 
   // ACTION: 手动检测接入变化 [POST] /api/kb/source-connections/{id}/detect
@@ -105,7 +99,7 @@ export default function ConnectionUpdatesPage() {
     const failed = source.status === 'failed';
     if (!failed) {
       source.lastDetected = now;
-      if (source.added + source.removed > 0 && !source.autoUpdate) source.status = 'pending';
+      if (source.added + source.removed > 0) source.status = 'pending';
     }
     source.logs.unshift({ id: source.id + '-detect-' + Date.now(), time: now, action: '手动检测', result: failed ? '失败' : '成功', detail: failed ? '来源暂时无法访问，保留上次检测结果，请检查来源后重试。' : '发现新增 ' + source.added + ' 条、来源删除 ' + source.removed + ' 条；本次检测不执行同步。' });
     detectingRef.current.delete(source.id);
@@ -118,7 +112,7 @@ export default function ConnectionUpdatesPage() {
   // ACTION: 批量管理接入来源 [POST] /api/kb/source-connections/batch
   async function handleBatchSources() {
     if (batchBusy) return;
-    const targets = selectedSourceRows.filter(s => canRunConnectionAction(s.status, batchAction, detectingRef.current.has(s.id)));
+    const targets = selectedSourceRows.filter(s => eligible(s, batchAction));
     const skipped = selectedSourceRows.length - targets.length;
     setBatchBusy(true);
     let success = 0;
@@ -126,7 +120,6 @@ export default function ConnectionUpdatesPage() {
       if (batchAction === 'detect') { if (await handleDetect(source, true)) success++; continue; }
       if (batchAction === 'sync') handleSyncNow(source);
       else if (batchAction === 'autoOn' || batchAction === 'autoOff') handleAutoUpdate(source, batchAction === 'autoOn');
-      else if (batchAction === 'frequency') handleFrequency(source, batchFrequency);
       else handleSourceEnabled(source, batchAction === 'resume');
       success++;
     }
@@ -134,38 +127,31 @@ export default function ConnectionUpdatesPage() {
     setSelectedSources([]); setBatchOpen(false); setBatchBusy(false); refresh();
   }
 
-  // ACTION: 立即同步接入来源 [POST] /api/kb/source-connections/{id}/sync
+  // ACTION: 同步后台新增条目 [POST] /api/kb/source-connections/{id}/sync
   function handleSyncNow(source: SourceConnection) {
-    if (!canRunConnectionAction(source.status, 'sync', detectingRef.current.has(source.id))) return;
+    if (!canSyncNewBackendRecords(source, detectingRef.current.has(source.id))) return;
     const now = new Date().toLocaleString('zh-CN', { hour12: false });
-    const wasPending = source.status === 'pending';
+    const added = source.added;
     source.status = 'syncing';
     refresh();
-    if (wasPending) source.count = Math.max(0, source.count + source.added - source.removed);
-    source.status = 'active';
+    source.count += added;
+    source.added = 0;
+    source.addedItems = [];
+    source.status = source.removed > 0 ? 'pending' : 'active';
     source.lastSync = now;
-    source.nextSync = nextSyncLabel(source.frequency, source.autoUpdate);
-    source.logs.unshift({ id: `${source.id}-${Date.now()}`, time: now, action: '立即同步', result: '成功', detail: `已处理最近发现的新增 ${source.added} 条、来源删除 ${source.removed} 条；内容修改按发布事件实时同步。` });
-    setMessage(`“${source.name}”同步完成。`);
+    source.nextSync = nextSyncLabel(source.autoUpdate);
+    source.logs.unshift({ id: `${source.id}-${Date.now()}`, time: now, action: '同步新增', result: '成功', detail: `已同步后台新增 ${added} 条；已有内容修改及来源删除按每日 00:00 的定时任务处理。` });
+    setMessage(`“${source.name}”已同步新增 ${added} 条。`);
     refresh();
   }
 
   // ACTION: 更新自动更新开关 [PATCH] /api/kb/source-connections/{id}/auto-update
   function handleAutoUpdate(source: SourceConnection, enabled: boolean) {
     source.autoUpdate = enabled;
-    source.nextSync = nextSyncLabel(source.frequency, enabled);
-    if (source.status !== 'paused' && source.status !== 'failed') source.status = enabled ? 'active' : (source.added + source.removed > 0 ? 'pending' : 'active');
-    source.logs.unshift({ id: `${source.id}-${Date.now()}`, time: '刚刚', action: enabled ? '开启自动更新' : '关闭自动更新', result: '成功', detail: enabled ? `按“${source.frequency}”执行；页面正文修改仍随发布事件实时同步。` : '继续检测新增和删除，但需要用户手动立即同步。' });
-    setMessage(enabled ? '已开启自动更新。' : '已关闭自动更新；系统仍会实时显示新增和删除。');
-    refresh();
-  }
-
-  // ACTION: 修改来源更新频率 [PATCH] /api/kb/source-connections/{id}/frequency
-  function handleFrequency(source: SourceConnection, frequency: SourceFrequency) {
-    source.frequency = frequency;
-    source.nextSync = nextSyncLabel(frequency, source.autoUpdate);
-    source.logs.unshift({ id: `${source.id}-${Date.now()}`, time: '刚刚', action: '修改更新频率', result: '成功', detail: `更新频率调整为“${frequency}”。` });
-    setMessage(`“${source.name}”更新频率已改为${frequency}。`);
+    source.nextSync = nextSyncLabel(enabled);
+    if (source.status !== 'paused' && source.status !== 'failed') source.status = source.added + source.removed > 0 ? 'pending' : 'active';
+    source.logs.unshift({ id: `${source.id}-${Date.now()}`, time: '刚刚', action: enabled ? '开启自动更新' : '关闭自动更新', result: '成功', detail: enabled ? '每日 00:00 更新新增、修改和删除。' : '暂停定时更新；仅后台新增条目仍可手动同步。' });
+    setMessage(enabled ? '已开启定时更新，每日 00:00 执行。' : '已关闭定时更新。');
     refresh();
   }
 
@@ -178,8 +164,8 @@ export default function ConnectionUpdatesPage() {
       return;
     }
     upsertKnowledgeAssets(sourceAssets(source).filter((asset) => source.pausedIds.includes(asset.id)).map((asset) => ({ ...asset, status: 'published' })));
-    source.status = source.added + source.removed > 0 && !source.autoUpdate ? 'pending' : 'active';
-    source.nextSync = nextSyncLabel(source.frequency, source.autoUpdate);
+    source.status = source.added + source.removed > 0 ? 'pending' : 'active';
+    source.nextSync = nextSyncLabel(source.autoUpdate);
     source.logs.unshift({ id: `${source.id}-${Date.now()}`, time: '刚刚', action: '恢复使用', result: '成功', detail: '恢复该应用/数据源的变化检测与内容学习；用户此前单独停用的知识保持停用。' });
     source.pausedIds = [];
     setMessage(`“${source.name}”已恢复使用。`);
@@ -233,8 +219,8 @@ export default function ConnectionUpdatesPage() {
             <p className="text-sm text-gray-500">共 {sources.length} 个应用/数据源 · 使用中持续检测新增和删除</p>
             <Button onClick={() => navigate('/knowledge-config/catalog/new')}>新增应用/数据源</Button>
           </div>
-          <div className="mb-4 grid gap-3 rounded border bg-gray-50 p-3 text-xs sm:grid-cols-3"><div><strong className="block text-gray-800 mb-1">新增 / 删除</strong>自动按频率处理，或手动立即同步</div><div><strong className="block text-gray-800 mb-1">已有内容修改</strong>发布后实时学习，不受新增 / 删除频率影响</div><div><strong className="block text-gray-800 mb-1">关闭使用</strong>停止全部更新，并停用关联知识</div></div>
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm"><Button size="sm" variant="ghost" disabled={!sources.length} onClick={() => setSelectedSources(sources.map(s => s.id))}>全选筛选结果</Button>{selectedSources.length > 0 && <div className="flex flex-wrap flex-1 items-center gap-2 rounded border border-blue-100 bg-blue-50 p-2"><span className="px-2">已选 {selectedSources.length} 项</span><Button size="sm" variant="outline" disabled={batchBusy} onClick={() => { setBatchAction('detect'); setBatchOpen(true); }}>检测变化</Button><Button size="sm" variant="outline" disabled={batchBusy} onClick={() => { setBatchAction('sync'); setBatchOpen(true); }}>立即同步</Button><Select value="" onValueChange={value => { setBatchAction(value as ConnectionBatchAction); setBatchOpen(true); }}><SelectTrigger aria-label="批量更新设置" className="w-36 h-8 bg-white"><SelectValue placeholder="更新设置" /></SelectTrigger><SelectContent>{(['autoOn', 'autoOff', 'frequency', 'pause', 'resume'] as ConnectionBatchAction[]).map(key => <SelectItem key={key} value={key}>{CONNECTION_ACTIONS[key]}</SelectItem>)}</SelectContent></Select><Button size="sm" variant="ghost" onClick={() => setSelectedSources([])}>取消选择</Button></div>}</div>
+          <div className="mb-4 grid gap-3 rounded border bg-gray-50 p-3 text-xs sm:grid-cols-3"><div><strong className="block text-gray-800 mb-1">新增 / 删除</strong>每日 00:00 定时更新</div><div><strong className="block text-gray-800 mb-1">已有内容修改</strong>每日 00:00 更新；后台新增可手动同步</div><div><strong className="block text-gray-800 mb-1">关闭使用</strong>停止全部更新，并停用关联知识</div></div>
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-sm"><Button size="sm" variant="ghost" disabled={!sources.length} onClick={() => setSelectedSources(sources.map(s => s.id))}>全选筛选结果</Button>{selectedSources.length > 0 && <div className="flex flex-wrap flex-1 items-center gap-2 rounded border border-blue-100 bg-blue-50 p-2"><span className="px-2">已选 {selectedSources.length} 项</span><Button size="sm" variant="outline" disabled={batchBusy} onClick={() => { setBatchAction('detect'); setBatchOpen(true); }}>检测变化</Button><Button size="sm" variant="outline" disabled={batchBusy || !selectedSourceRows.some(s => eligible(s, 'sync'))} onClick={() => { setBatchAction('sync'); setBatchOpen(true); }}>同步新增</Button><Select value="" onValueChange={value => { setBatchAction(value as ConnectionBatchAction); setBatchOpen(true); }}><SelectTrigger aria-label="批量更新设置" className="w-36 h-8 bg-white"><SelectValue placeholder="更新设置" /></SelectTrigger><SelectContent>{(['autoOn', 'autoOff', 'pause', 'resume'] as ConnectionBatchAction[]).map(key => <SelectItem key={key} value={key}>{CONNECTION_ACTIONS[key]}</SelectItem>)}</SelectContent></Select><Button size="sm" variant="ghost" onClick={() => setSelectedSources([])}>取消选择</Button></div>}</div>
           <div className="overflow-x-auto"><Table className="[&_th]:whitespace-nowrap">
             <TableHeader><TableRow><TableHead><input type="checkbox" aria-label="全选筛选后的接入" checked={sources.length > 0 && sources.every(s => selectedSources.includes(s.id))} onChange={e => setSelectedSources(e.target.checked ? sources.map(s => s.id) : [])} /></TableHead><TableHead>知识资产</TableHead><TableHead>知识板块</TableHead><TableHead>知识数</TableHead><TableHead>使用状态</TableHead><TableHead>更新规则</TableHead><TableHead>变化详情</TableHead><TableHead>最近检测 / 学习</TableHead><TableHead>健康度</TableHead><TableHead>状态</TableHead><TableHead className="text-right">操作</TableHead></TableRow></TableHeader>
             <TableBody>{sources.map((source) => {
@@ -246,7 +232,7 @@ export default function ConnectionUpdatesPage() {
                 <TableCell className="min-w-28"><SectionTag k={source.section} /></TableCell>
                 <TableCell>{source.count}</TableCell>
                 <TableCell className="min-w-28 whitespace-nowrap"><div className="flex items-center gap-2"><Switch aria-label={`${source.name}使用状态`} checked={source.status !== 'paused'} disabled={source.status === 'syncing' || detecting.includes(source.id)} onCheckedChange={(enabled) => enabled ? handleSourceEnabled(source, true) : setPauseSource(source)} /><span className="text-xs text-gray-500">{source.status === 'paused' ? '已关闭' : '使用中'}</span></div></TableCell>
-                <TableCell className="min-w-52"><div className="flex items-center gap-2"><Switch aria-label={`${source.name}自动更新知识`} checked={source.autoUpdate} disabled={source.status === 'paused' || source.status === 'syncing' || detecting.includes(source.id)} onCheckedChange={enabled => handleAutoUpdate(source, enabled)} /><span className="text-xs">{source.autoUpdate ? '自动处理新增 / 删除' : '手动处理新增 / 删除'}</span></div>{source.autoUpdate && <Select value={source.frequency} disabled={source.status === 'paused' || source.status === 'syncing' || detecting.includes(source.id)} onValueChange={value => handleFrequency(source, value as SourceFrequency)}><SelectTrigger aria-label={`${source.name}更新频率`} className="h-8 mt-2 text-xs"><SelectValue /></SelectTrigger><SelectContent>{FREQUENCIES.map(f => <SelectItem key={f} value={f}>{FREQUENCY_LABELS[f]}</SelectItem>)}</SelectContent></Select>}<div className="mt-1 text-xs text-gray-500">{source.status === 'paused' ? '已停止全部更新' : source.status === 'failed' ? '连接恢复后重试' : source.autoUpdate ? '下次：' + nextSyncLabel(source.frequency, true) : '检测到变化后点击立即同步'}</div></TableCell>
+                <TableCell className="min-w-44"><div className="flex items-center gap-2"><Switch aria-label={`${source.name}定时更新`} checked={source.autoUpdate} disabled={source.status === 'paused' || source.status === 'syncing' || detecting.includes(source.id)} onCheckedChange={enabled => handleAutoUpdate(source, enabled)} /><span className="text-xs">每日 00:00</span></div><div className="mt-1 text-xs text-gray-500">{source.status === 'paused' ? '已停止更新' : source.autoUpdate ? '定时更新已开启' : '定时更新已关闭'}</div></TableCell>
                 <TableCell><Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => setChangeSource(source)}><span className={source.added ? 'text-green-600' : 'text-gray-400'}>新增 {source.added}</span><span className="mx-1 text-gray-300">/</span><span className={source.removed ? 'text-red-500' : 'text-gray-400'}>删除 {source.removed}</span></Button></TableCell>
 
                 <TableCell className="min-w-40 text-xs"><div>检测：{source.lastDetected}</div><Button size="sm" variant="outline" className="h-7 text-xs mt-1" disabled={!canRunConnectionAction(source.status, 'detect', detecting.includes(source.id))} onClick={() => handleDetect(source)}>{detecting.includes(source.id) ? '检测中…' : '检测变化'}</Button><div className="mt-1 text-gray-400">学习：{source.lastSync}</div></TableCell>
@@ -254,7 +240,7 @@ export default function ConnectionUpdatesPage() {
                 <TableCell><Badge className={status.cls}>{status.label}</Badge></TableCell>
                 <TableCell><div className="flex min-w-56 flex-wrap justify-end gap-1.5">
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => navigate(`/knowledge-config/catalog?source=${encodeURIComponent(source.sourceId)}&section=${source.section}`)}>查看知识</Button>
-                  <Button size="sm" variant="outline" className="h-7 text-xs" disabled={source.status === 'paused' || source.status === 'syncing' || detecting.includes(source.id)} onClick={() => handleSyncNow(source)}>立即同步</Button>
+                  {source.kind === '后台页面' && <Button size="sm" variant="outline" className="h-7 text-xs" disabled={!canSyncNewBackendRecords(source, detecting.includes(source.id))} onClick={() => handleSyncNow(source)}>同步新增</Button>}
                   <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setLogSource(source)}>任务日志</Button>
                 </div></TableCell>
               </TableRow>;
@@ -272,9 +258,9 @@ export default function ConnectionUpdatesPage() {
       </CardContent></Card></TabsContent>
     </Tabs>
 
-    <Dialog open={batchOpen} onOpenChange={open => !batchBusy && setBatchOpen(open)}><DialogContent><DialogHeader><DialogTitle>批量{CONNECTION_ACTIONS[batchAction]}</DialogTitle></DialogHeader><p className="text-sm">已选 {selectedSourceRows.length} 项，可执行 {batchEligible.length} 项；不符合当前状态的条目将跳过。</p><div className="max-h-40 overflow-auto text-sm space-y-1">{selectedSourceRows.map(s => <div key={s.id}>{s.name}{!batchEligible.includes(s) && <span className="text-gray-400">（跳过）</span>}</div>)}</div>{batchAction === 'pause' && <p className="text-sm text-amber-700">将停止检测与同步，并停用关联的 {batchEligible.reduce((sum, s) => sum + s.count, 0)} 条知识。保留内容、接入关系与日志。</p>}{batchAction === 'detect' && <p className="text-xs text-gray-500">只检查新增与删除，不执行同步或学习。</p>}{batchAction === 'frequency' && <label className="text-sm">更新频率<select className="ml-3 h-9 rounded border px-3" value={batchFrequency} onChange={e => setBatchFrequency(e.target.value as SourceFrequency)}>{FREQUENCIES.map(f => <option key={f} value={f}>{FREQUENCY_LABELS[f]}</option>)}</select></label>}<DialogFooter><Button variant="outline" disabled={batchBusy} onClick={() => setBatchOpen(false)}>取消</Button><Button disabled={batchBusy || !batchEligible.length} onClick={handleBatchSources}>{batchBusy ? '执行中…' : '确认执行'}</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={batchOpen} onOpenChange={open => !batchBusy && setBatchOpen(open)}><DialogContent><DialogHeader><DialogTitle>批量{CONNECTION_ACTIONS[batchAction]}</DialogTitle></DialogHeader><p className="text-sm">已选 {selectedSourceRows.length} 项，可执行 {batchEligible.length} 项；不符合操作条件的条目将跳过。</p><div className="max-h-40 overflow-auto text-sm space-y-1">{selectedSourceRows.map(s => <div key={s.id}>{s.name}{!batchEligible.includes(s) && <span className="text-gray-400">（跳过）</span>}</div>)}</div>{batchAction === 'pause' && <p className="text-sm text-amber-700">将停止检测与同步，并停用关联的 {batchEligible.reduce((sum, s) => sum + s.count, 0)} 条知识。保留内容、接入关系与日志。</p>}{batchAction === 'detect' && <p className="text-xs text-gray-500">只检查新增与删除，不执行同步或学习。</p>}{batchAction === 'sync' && <p className="text-xs text-gray-500">仅同步后台页面的新增条目；前台页面、无新增、失败或已关闭使用的接入将跳过。</p>}<DialogFooter><Button variant="outline" disabled={batchBusy} onClick={() => setBatchOpen(false)}>取消</Button><Button disabled={batchBusy || !batchEligible.length} onClick={handleBatchSources}>{batchBusy ? '执行中…' : '确认执行'}</Button></DialogFooter></DialogContent></Dialog>
 
-    <Dialog open={!!changeSource} onOpenChange={(open) => !open && setChangeSource(null)}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>变化详情 · {changeSource?.name}</DialogTitle></DialogHeader><p className="rounded bg-blue-50 px-3 py-2 text-xs text-blue-700">内容修改随发布事件实时同步，不在栏目变化数量中统计；可在日志查看处理结果。</p><div className="grid gap-4 md:grid-cols-2"><div><h3 className="mb-2 text-sm font-medium text-green-700">新增 {changeSource?.added || 0} 条</h3><div className="max-h-64 space-y-2 overflow-auto">{changeSource?.addedItems.map((item) => <div key={item.id} className="rounded border p-2 text-sm"><div>{item.name}</div><div className="mt-1 text-xs text-gray-400">{item.path} · {item.detectedAt}</div></div>)}{changeSource?.added === 0 && <p className="text-sm text-gray-400">没有新增条目</p>}</div></div><div><h3 className="mb-2 text-sm font-medium text-red-600">来源删除 {changeSource?.removed || 0} 条</h3><div className="max-h-64 space-y-2 overflow-auto">{changeSource?.removedItems.map((item) => <div key={item.id} className="rounded border p-2 text-sm"><div>{item.name}</div><div className="mt-1 text-xs text-gray-400">{item.path} · {item.detectedAt}</div></div>)}{changeSource?.removed === 0 && <p className="text-sm text-gray-400">没有来源删除条目</p>}</div></div></div><DialogFooter><Button variant="outline" onClick={() => setChangeSource(null)}>关闭</Button>{changeSource && !changeSource.autoUpdate && changeSource.status !== 'paused' && changeSource.status !== 'syncing' && !detecting.includes(changeSource.id) && <Button onClick={() => { handleSyncNow(changeSource); setChangeSource(null); }}>立即同步</Button>}</DialogFooter></DialogContent></Dialog>
+    <Dialog open={!!changeSource} onOpenChange={(open) => !open && setChangeSource(null)}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>变化详情 · {changeSource?.name}</DialogTitle></DialogHeader><p className="rounded bg-blue-50 px-3 py-2 text-xs text-blue-700">变化详情只统计新增和删除；内容修改在每日 00:00 更新，可在日志查看结果。</p><div className="grid gap-4 md:grid-cols-2"><div><h3 className="mb-2 text-sm font-medium text-green-700">新增 {changeSource?.added || 0} 条</h3><div className="max-h-64 space-y-2 overflow-auto">{changeSource?.addedItems.map((item) => <div key={item.id} className="rounded border p-2 text-sm"><div>{item.name}</div><div className="mt-1 text-xs text-gray-400">{item.path} · {item.detectedAt}</div></div>)}{changeSource?.added === 0 && <p className="text-sm text-gray-400">没有新增条目</p>}</div></div><div><h3 className="mb-2 text-sm font-medium text-red-600">来源删除 {changeSource?.removed || 0} 条</h3><div className="max-h-64 space-y-2 overflow-auto">{changeSource?.removedItems.map((item) => <div key={item.id} className="rounded border p-2 text-sm"><div>{item.name}</div><div className="mt-1 text-xs text-gray-400">{item.path} · {item.detectedAt}</div></div>)}{changeSource?.removed === 0 && <p className="text-sm text-gray-400">没有来源删除条目</p>}</div></div></div><DialogFooter><Button variant="outline" onClick={() => setChangeSource(null)}>关闭</Button>{changeSource && canSyncNewBackendRecords(changeSource, detecting.includes(changeSource.id)) && <Button onClick={() => { handleSyncNow(changeSource); setChangeSource(null); }}>同步新增</Button>}</DialogFooter></DialogContent></Dialog>
 
     <Dialog open={!!logSource} onOpenChange={(open) => !open && setLogSource(null)}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>任务日志 · {logSource?.name}</DialogTitle></DialogHeader><div className="max-h-96 overflow-auto"><Table><TableHeader><TableRow><TableHead>时间</TableHead><TableHead>动作</TableHead><TableHead>结果</TableHead><TableHead>说明</TableHead></TableRow></TableHeader><TableBody>{logSource?.logs.map((item) => <TableRow key={item.id}><TableCell className="text-xs">{item.time}</TableCell><TableCell>{item.action}</TableCell><TableCell><Badge className={item.result === '成功' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}>{item.result}</Badge></TableCell><TableCell className="max-w-72 text-xs text-gray-600">{item.detail}</TableCell></TableRow>)}</TableBody></Table></div></DialogContent></Dialog>
 
