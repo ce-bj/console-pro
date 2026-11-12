@@ -27,6 +27,7 @@ export const AGENT_STATUS_CONFIG: Record<AgentStatus, { label: string; cls: stri
 
 export const TOOL_TYPE_CONFIG: Record<ToolType, { label: string; cls: string }> = {
   rag_search: { label: 'RAG 检索', cls: 'bg-blue-50 text-blue-600 border-blue-100' },
+  whole_load: { label: '整篇加载', cls: 'bg-amber-50 text-amber-700 border-amber-100' },
   request_handoff: { label: '转人工', cls: 'bg-purple-50 text-purple-600 border-purple-100' },
   lead_capture_form: { label: '留资表单', cls: 'bg-green-50 text-green-600 border-green-100' },
   crm_write: { label: 'CRM 写入', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
@@ -151,6 +152,7 @@ export const mockAgentListData: AgentListItem[] = [
 ];
 
 export const mockToolMetricsData: ToolMetricItem[] = [
+  { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_solution', toolType: 'whole_load', toolName: '整篇加载', callCount: 1284, avgCallsPerTurn: 0.92, successRate: 99.6, avgLatencyMs: 38, correctnessScore: 0.97, argsQualityScore: 0.95, businessMetric: '命中二级行业 64%，命中一级行业 33%，无匹配 3%' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_cs_cn', toolType: 'rag_search', toolName: '知识库检索', callCount: 4216, avgCallsPerTurn: 0.74, successRate: 99.1, avgLatencyMs: 420, correctnessScore: 0.88, argsQualityScore: 0.91, businessMetric: 'RAG 调用率 74.2% / 命中率 89.1%' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_cs_cn', toolType: 'request_handoff', toolName: '转人工', callCount: 477, avgCallsPerTurn: 0.08, successRate: 98.5, avgLatencyMs: 180, correctnessScore: 0.84, argsQualityScore: 0.89, businessMetric: '转人工率 8.4%' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_cs_cn', toolType: 'lead_capture_form', toolName: '留资表单', callCount: 920, avgCallsPerTurn: 0.16, successRate: 97.9, avgLatencyMs: 210, correctnessScore: 0.86, argsQualityScore: 0.83, businessMetric: '触发率 16.2% / 完成率 32.6%' },
@@ -177,6 +179,7 @@ export const mockAgentToolCapabilities: AgentToolCapability[] = [
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_cs_cn', toolName: '留资表单', toolType: 'lead_capture_form', version: 'lead-form-v8', enabled: true, description: '客户表达明确意向后收集公司规模、联系方式和上线时间。' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_cs_cn', toolName: 'CRM 写入', toolType: 'crm_write', version: 'crm-write-v3', enabled: true, description: '将确认后的客户需求写入 CRM 线索池。' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_cs_cn', toolName: '方案顾问 Agent', toolType: 'agent_call', version: 'agent_solution_v1.2.0', enabled: true, description: '将复杂部署与方案设计任务委派给专业子 Agent。' },
+  { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_solution', toolName: '整篇加载', toolType: 'whole_load', version: 'whole-load-v1', enabled: true, description: '按企业行业和一级/二级分类，整份取用“整篇加载”的知识（如页面规范、禁宣表述），作为生成约束，不作为引用来源。' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_solution', toolName: '方案知识检索', toolType: 'rag_search', version: 'rag-search-v6', enabled: true, description: '检索部署架构、资源规格、实施周期和安全规范。' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_solution', toolName: '创建方案工单', toolType: 'create_ticket', version: 'ticket-v2', enabled: true, description: '为待确认的架构、安全和实施问题创建方案工单。' },
   { tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_solution', toolName: '安全评审 Agent', toolType: 'agent_call', version: 'security-review-v1', enabled: true, description: '将安全、合规和容灾问题委派给安全评审子 Agent。' },
@@ -290,6 +293,7 @@ export const mockObservabilitySessions: ObservabilitySession[] = [
   {
     sessionId: 'session_solution_1001', userId: 'agent_parent_9304', summary: '生成 200 人团队私有化部署方案框架', tenantId: 'tenant_anvil', siteId: 'site_anvil_cn', agentId: 'agent_anvil_solution', environment: 'production', startedAt: '2026-07-27 09:45', completedAt: '2026-07-27 09:46', status: 'completed',
     turns: [{ traceId: 'trace_solution_1001', turnSeq: 1, loopCount: 2, occurredAt: '2026-07-27 09:45', input: '根据 200 人团队和 8 月上线目标生成私有化部署方案框架。', output: '建议采用单租户私有化部署，分为需求澄清、环境准备、集成联调、知识迁移和灰度上线五个阶段。', status: 'completed', firstResponseMs: 410, totalDurationMs: 2310, userFeedback: 'none', traceUrl: traceUrl('trace_solution_1001'), versions: specialistVersions, generation: { observationId: 'gen_solution_1001', model: specialistVersions.model, promptVersion: specialistVersions.prompt, status: 'success', firstTokenMs: 302, durationMs: 780, inputTokens: 1140, outputTokens: 386, cost: 0.31 }, toolObservations: [
+      { observationId: 'tool_solution_1001_whole', traceId: 'trace_solution_1001', toolName: '整篇加载', toolType: 'whole_load', version: 'whole-load-v1', inputSummary: 'categories=页面规范/产品详情页内容规范, 内容与表达规范/禁宣与限宣表述; industry=机械设备/数控机床（服务端注入）', outputSummary: '产品详情页内容规范 v3：命中二级行业「数控机床」；禁宣与限宣表述 v1：命中一级行业「机械设备」', status: 'success', durationMs: 36, selectionScore: 0.97, actionAlignmentScore: 0.96, successScore: 1, parameterAccuracyScore: 0.98, wholeLoads: [{ assetId: 'pik_006', title: '机械设备产品详情页内容规范', category: '页面规范 / 产品详情页内容规范', version: 3, matchedLevel: '二级行业', status: 'available' }, { assetId: 'pik_007', title: '机械设备行业禁宣与限宣表述', category: '内容与表达规范 / 禁宣与限宣表述', version: 1, matchedLevel: '一级行业', status: 'available' }] },
       { observationId: 'tool_solution_1001_rag', traceId: 'trace_solution_1001', toolName: '方案知识检索', toolType: 'rag_search', version: 'rag-search-v6', inputSummary: 'query=200人团队 私有化部署 实施阶段 资源规格', outputSummary: '命中容量规划、部署架构和实施阶段文档', status: 'success', durationMs: 446, selectionScore: 0.98, actionAlignmentScore: 0.96, successScore: 1, parameterAccuracyScore: 0.97 },
       { observationId: 'tool_solution_1001_ticket', traceId: 'trace_solution_1001', toolName: '创建方案工单', toolType: 'create_ticket', version: 'ticket-v2', inputSummary: 'priority=medium; category=部署方案确认; teamSize=200', outputSummary: '工单 TK-SOL-100 创建成功', status: 'success', durationMs: 312, selectionScore: 0.94, actionAlignmentScore: 0.95, successScore: 1, parameterAccuracyScore: 0.96 },
     ], retrieverObservations: [

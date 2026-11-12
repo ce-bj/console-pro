@@ -15,9 +15,9 @@ import {
   mockAssetChunks, mockRawContent, mockCallLogs, healthSuggestion, evaluateGates, HealthBreakdown,
   AssetChunk, CHUNK_TYPES, mockAssetHistory, KbAsset, KbStatus,
   computeHealthBreakdown, computeHealth, mockHealthWeights, effectiveStatus, TODAY, mockCustomSchemaFields,
-  getKnowledgeAsset, upsertKnowledgeAsset, resolveChunkRule, GENERAL_CONTENT_FORMAT,
+  getKnowledgeAsset, upsertKnowledgeAsset, resolveChunkRule, GENERAL_CONTENT_FORMAT, usageModesOf, usageModeChoices, isTableContent, mockWholeLoadSettings, UsageMode,
 } from './data';
-import { SectionTag, StatusActions, HealthValue, MetricBar } from './shared';
+import { SectionTag, StatusActions, HealthValue, MetricBar, UsageModeChips } from './shared';
 import { mockPlatformIndustryKnowledgeData, PlatformIndustryKnowledge } from '../N14-IndustryKnowledgePlatformPage';
 import StructuredRecords from './StructuredRecords';
 import KnowledgeFilePreview from './KnowledgeFilePreview';
@@ -38,9 +38,12 @@ function platformIndustryToAsset(item: PlatformIndustryKnowledge): KbAsset {
     createdAt: item.createdAt || item.updatedAt, createdBy: item.createdBy || item.updatedBy, updatedAt: item.updatedAt,
     tags: item.tags, summary: item.summary, note: item.note, folderId: item.folderId, customFields: item.customFields,
     sourceRef: item.sourceRef || `${item.source} · v${item.currentVersion}`,
-    industrySourceId: item.id, industrySourceVersion: item.currentVersion,
+    industrySourceId: item.id, industrySourceVersion: item.currentVersion, usageModes: item.usageModes,
   };
 }
+
+// ACTION: 调整使用方式（可多选，重新学习后生效）[PATCH] /api/kb/assets/{id}/usage-modes（平台：/api/platform/industry-knowledge/{id}/usage-modes）
+function handleUpdateUsageModes(payload: { id: string; usageModes: UsageMode[]; platform: boolean }) { console.log('update usage modes', payload); }
 
 // ACTION: 重新学习 [POST] /api/kb/assets/{id}/relearn
 function relearn(id: string) { console.log('relearn knowledge asset', id); }
@@ -73,6 +76,7 @@ export default function AssetDetailPage() {
   const found = resolveAsset();
 
   const [asset, setAsset] = useState<KbAsset | undefined>(found);
+  const [usageNotice, setUsageNotice] = useState('');
   const [chunks, setChunks] = useState<AssetChunk[]>(mockAssetChunks[assetId ?? ''] ?? []);
   const [chunkQuery, setChunkQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -96,6 +100,19 @@ export default function AssetDetailPage() {
   const connection = mockSourceConnectionsData.find(source => source.section === a.section && source.sourceId === (a.frontendPageId || a.backendPageId));
   const shownStatus = effectiveStatus(a);
   const sec = SECTION_MAP[a.section];
+  const modes = usageModesOf(a);
+  // 只整篇加载（没有语义检索）的知识不展示切片
+  const wholeLoad = modes.includes('整篇加载') && !modes.includes('语义检索') && a.section !== 'structured';
+  const platformItem = platformMode ? mockPlatformIndustryKnowledgeData.find((item) => item.id === a.id) : undefined;
+  function updateUsage(usageModes: UsageMode[]) {
+    handleUpdateUsageModes({ id: a.id, usageModes, platform: platformMode });
+    if (platformItem) platformItem.usageModes = usageModes;
+    // 已启用的企业知识调整使用方式后进入待更新，重新学习成功前沿用上一版本
+    const next: KbAsset = { ...a, usageModes, status: !platformMode && a.status === 'published' ? 'stale' : a.status };
+    if (!platformMode) upsertKnowledgeAsset(next);
+    setAsset(next);
+    setUsageNotice('已保存，重新学习后生效');
+  }
   const appliedChunkRule = resolveChunkRule(sec, a.contentFormat);
   const rawContent = mockRawContent[a.id];
   const breakdown = a.status === 'draft' || a.status === 'learning' ? undefined : computeHealthBreakdown(a, chunks, mockCallLogs);
@@ -321,11 +338,13 @@ export default function AssetDetailPage() {
       {replaceOpen && <ReplaceKnowledgeFile asset={a} onClose={() => setReplaceOpen(false)} onSaved={next => setAsset(next)} />}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">{a.section === 'structured' ? '结构化数据记录' : '内容 — 原文与解析切片'}</CardTitle>
-          {a.section !== 'structured' && <p className="text-xs text-gray-400 font-normal mt-1">正文与解析切片，共 {a.chunks} 个可检索片段。</p>}
+          <CardTitle className="text-sm">{a.section === 'structured' ? '结构化数据记录' : wholeLoad ? '内容 — 原文（整篇加载）' : '内容 — 原文与解析切片'}</CardTitle>
+          {a.section !== 'structured' && <p className="text-xs text-gray-400 font-normal mt-1">{wholeLoad ? '不切片、不向量化，智能体按行业和分类整份取用原文。' : `正文与解析切片，共 ${a.chunks} 个可检索片段。`}</p>}
         </CardHeader>
         <CardContent>
-          {a.section === 'structured' ? (
+          {wholeLoad ? (
+            <KnowledgeFilePreview key={a.id} asset={a} />
+          ) : a.section === 'structured' ? (
             a.replacementPending ? <p className="text-sm text-amber-700">新文件等待解析与学习，完成后更新表格。</p> : <StructuredRecords key={a.id} asset={a} onAssetChange={next => { upsertKnowledgeAsset(next); setAsset(next); }} />
           ) : a.replacementPending ? (
             <KnowledgeFilePreview key={a.id + a.sourceRef} asset={a} />
@@ -434,32 +453,51 @@ export default function AssetDetailPage() {
         </CardContent>
       </Card>
 
-      {/* 非结构化知识沿用板块级检索参数 */}
-      {a.section !== 'structured' && <Card>
+      {/* 使用方式（可多选，随时调整）与对应参数 */}
+      <Card>
         <CardHeader className="pb-2 flex-row items-center justify-between">
-          <CardTitle className="text-sm">检索参数（来源于该知识板块的统一配置）</CardTitle>
-          <button className="text-xs text-blue-600 hover:underline" onClick={() => navigate(`/knowledge-config/sections/${a.section}`)}>去调整 →</button>
+          <CardTitle className="text-sm">使用方式与检索参数</CardTitle>
+          <button className="text-xs text-blue-600 hover:underline" onClick={() => navigate(`/knowledge-config/sections/${a.section}`)}>板块参数 →</button>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-4 gap-4 text-sm">
-            <div>
-              <div className="text-xs text-gray-400">分块方式</div>
-              <div className="mt-1 text-gray-700">{appliedChunkRule.chunkMethod}</div>
-              {/* 板块下可按内容形式配多套切片方式，这里标出这条知识实际命中的是哪一套 */}
-              <div className="mt-0.5 text-[11px] text-gray-400">
-                按内容形式「{appliedChunkRule.contentFormat}」{appliedChunkRule.contentFormat === GENERAL_CONTENT_FORMAT ? '（兜底）' : ''}
-              </div>
-            </div>
-            <div><div className="text-xs text-gray-400">向量权重</div><div className="mt-1 text-gray-700">{sec.vectorWeight}</div></div>
-            <div><div className="text-xs text-gray-400">相似度阈值</div><div className="mt-1 text-gray-700">{sec.threshold}</div></div>
-            <div><div className="text-xs text-gray-400">Rerank</div><div className="mt-1 text-gray-700">{sec.rerank}</div></div>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="text-xs text-gray-400">使用方式</span>
+            <UsageModeChips value={modes} choices={usageModeChoices(isTableContent(a))} onChange={updateUsage} />
+            {usageNotice && <span className="text-xs text-amber-700">{usageNotice}</span>}
+            {platformItem && <><span className="ml-3 text-xs text-gray-400">企业可见</span><Badge className={platformItem.visibility === '仅平台' ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700'}>{platformItem.visibility || '企业可见'}</Badge>{platformItem.visibility === '仅平台' && <span className="text-xs text-gray-500">不开放导入，企业智能体按所选行业默认可用</span>}</>}
           </div>
+          {modes.includes('语义检索') && a.section !== 'structured' && <div>
+            <div className="mb-1.5 text-xs font-medium text-gray-700">语义检索（来源于该知识板块的统一配置）</div>
+            <div className="grid grid-cols-4 gap-4 text-sm">
+              <div>
+                <div className="text-xs text-gray-400">分块方式</div>
+                <div className="mt-1 text-gray-700">{appliedChunkRule.chunkMethod}</div>
+                <div className="mt-0.5 text-[11px] text-gray-400">按内容形式「{appliedChunkRule.contentFormat}」{appliedChunkRule.contentFormat === GENERAL_CONTENT_FORMAT ? '（兜底）' : ''}</div>
+              </div>
+              <div><div className="text-xs text-gray-400">向量权重</div><div className="mt-1 text-gray-700">{sec.vectorWeight}</div></div>
+              <div><div className="text-xs text-gray-400">相似度阈值</div><div className="mt-1 text-gray-700">{sec.threshold}</div></div>
+              <div><div className="text-xs text-gray-400">Rerank</div><div className="mt-1 text-gray-700">{sec.rerank}</div></div>
+            </div>
+          </div>}
+          {modes.includes('精确查询') && <div>
+            <div className="mb-1.5 text-xs font-medium text-gray-700">精确查询</div>
+            <p className="text-sm text-gray-600">保留记录、字段类型和单位，按字段条件筛选、排序、计数；字段用途在“结构化数据记录”的字段设置中调整。</p>
+          </div>}
+          {modes.includes('整篇加载') && <div>
+            <div className="mb-1.5 text-xs font-medium text-gray-700">整篇加载</div>
+            <div className="grid grid-cols-4 gap-4 text-sm">
+              <div><div className="text-xs text-gray-400">分块方式</div><div className="mt-1 text-gray-700">不切片 · 不向量化</div></div>
+              <div><div className="text-xs text-gray-400">取用条件</div><div className="mt-1 text-gray-700">行业 + 一级 / 二级分类</div></div>
+              <div><div className="text-xs text-gray-400">单篇上限</div><div className="mt-1 text-gray-700">{mockWholeLoadSettings.maxChars.toLocaleString()} 字</div></div>
+              <div><div className="text-xs text-gray-400">回答出处</div><div className="mt-1 text-gray-700">不作为引用来源</div></div>
+            </div>
+          </div>}
         </CardContent>
-      </Card>}
+      </Card>
 
       {/* 来源 */}
       <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">来源（回答时作为出处展示给用户）</CardTitle></CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">{wholeLoad ? '来源（整篇加载作为生成约束，不作为回答出处展示）' : '来源（回答时作为出处展示给用户）'}</CardTitle></CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-sm">
             <span className="text-gray-400">📎</span>

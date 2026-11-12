@@ -5,7 +5,7 @@ export type TenantListSortKey = 'priority' | 'companyName' | 'sessionCount' | 'r
 export type SortDirection = 'asc' | 'desc';
 export type PortalStatus = 'online' | 'paused' | 'risk';
 export type AgentStatus = 'healthy' | 'warning' | 'risk';
-export type ToolType = 'rag_search' | 'request_handoff' | 'lead_capture_form' | 'crm_write' | 'create_ticket' | 'agent_call';
+export type ToolType = 'rag_search' | 'whole_load' | 'request_handoff' | 'lead_capture_form' | 'crm_write' | 'create_ticket' | 'agent_call';
 export type TurnStatus = 'success' | 'warning' | 'error';
 export type RiskLevel = 'critical' | 'high' | 'medium' | 'low';
 export type EvalStatus = 'passed' | 'blocked' | 'running';
@@ -494,6 +494,8 @@ export interface ToolObservation {
   targetAgentName?: string;
   childSessionId?: string;
   childTraceId?: string;
+  /** whole_load：本次整篇加载的知识（含仅平台的行业知识；企业侧日志不展示仅平台知识的名称和正文） */
+  wholeLoads?: { assetId: string; title: string; category: string; version: number; matchedLevel: string; status: 'available' | 'missing' | 'error' }[];
 }
 
 export interface RetrieverHit {

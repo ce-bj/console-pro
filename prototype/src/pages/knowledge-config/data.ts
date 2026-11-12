@@ -41,13 +41,15 @@ export const VALIDITY_STATUSES: ValidityStatus[] = ['现行有效', '即将生�
 export const AUDIENCE_OPTIONS = ['企业内部', '所有人'];
 export const LANGUAGE_OPTIONS = ['简体中文', '繁体中文', '英语', '其他语言'];
 export const PRIMARY_CATEGORIES: Record<KnowledgeBaseType, string[]> = {
-  行业知识库: ['行业概览', '政策法规', '标准规范', '行业数据', '常见问题', '行业动态'],
+  行业知识库: ['行业概览', '政策法规', '标准规范', '行业数据', '常见问题', '行业动态', '页面规范', '内容与表达规范'],
   企业公共知识库: ['企业基础信息', '机构与组织', '用户服务', '企业通用问答', '联系与反馈', '网站使用帮助', '多语言与版本'],
   企业业务知识库: ['业务与服务', '产品与资源', '办事指南', '政策与制度', '数据与报告', '专业问答', '动态内容', 'Agent专用知识'],
 };
 export const SECONDARY_CATEGORIES: Record<string, string[]> = {
   '行业知识库::标准规范': ['国家标准', '行业标准'],
   '行业知识库::政策法规': ['国家政策', '地方政策'],
+  '行业知识库::页面规范': ['产品详情页内容规范', '解决方案页内容规范'],
+  '行业知识库::内容与表达规范': ['内容红线', '禁宣与限宣表述', '表达口径', '行业用语规范'],
   '企业公共知识库::企业通用问答': ['账户与登录', '搜索与下载'],
   '企业公共知识库::用户服务': ['服务渠道', '投诉建议'],
   // 多语言配置：与营销话术同一套双来源模型——企业词条在 N3 编辑发布后同步写入此分类下的 Excel 副本；
@@ -164,6 +166,35 @@ export type KbStatus = 'draft' | 'published' | 'archived' | 'stale' | 'learning'
 export type Timeliness = '实时' | '小时' | '每日' | '静态';
 export type AccessLevel = '公开' | '内部' | '受限';
 export type RetrievalMode = 'deterministic' | 'divergent'; // 确定性 / 发散
+
+// ── 使用方式：智能体怎么用这条知识（与知识板块、企业可见互相独立）────────────
+// 每个上传文件都有使用方式，可多选、可随时在列表和详情中调整；调整后重新学习生效。
+// 可选范围按所选知识板块：结构化数据 = 精确查询、语义检索、整篇加载；
+// 文档知识、问答知识等没有字段 = 语义检索、整篇加载。
+export type UsageMode = '语义检索' | '精确查询' | '整篇加载';
+export const USAGE_MODES: UsageMode[] = ['语义检索', '精确查询', '整篇加载'];
+export const USAGE_MODE_DESC: Record<UsageMode, string> = {
+  语义检索: '切片后向量 + 倒排混合召回，智能体按分类检索命中片段，回答时作为出处引用。',
+  精确查询: '保留记录、字段类型和单位，按字段条件筛选、排序、计数。只有结构化数据可选（文档没有字段）。',
+  整篇加载: '保留原文，不切片、不向量化。智能体按“行业 + 一级/二级分类”整份取用，适合规范、模板、写作要求等篇幅短且需整份遵守的内容。',
+};
+export const TABLE_FILE_PATTERN = /\.(xlsx?|csv|jsonl?)$/i;
+export const isTableContent = (asset: { section: SectionKey; contentFormat?: string }) => asset.section === 'structured' || asset.contentFormat === '结构化记录';
+export const usageModeChoices = (table: boolean): UsageMode[] => table ? ['精确查询', '语义检索', '整篇加载'] : ['语义检索', '整篇加载'];
+export const defaultUsageModes = (table: boolean): UsageMode[] => [table ? '精确查询' : '语义检索'];
+export const usageModesOf = (asset: { section: SectionKey; contentFormat?: string; usageModes?: UsageMode[] }): UsageMode[] => {
+  const table = isTableContent(asset);
+  const valid = (asset.usageModes ?? []).filter((mode) => usageModeChoices(table).includes(mode));
+  return valid.length ? USAGE_MODES.filter((mode) => valid.includes(mode)) : defaultUsageModes(table);
+};
+// DataSlot: 整篇加载单篇字数上限（超限在解析时拦截，不在加载时截断）
+export const mockWholeLoadSettings = { maxChars: 5000 };
+
+// ── 企业可见：仅平台行业知识使用（N14）───────────────────────────────────
+// 企业可见：企业可浏览并导入为自己的副本；仅平台：不开放导入，企业不可见，
+// 企业智能体按其所选行业默认可用，无需在 N3 配置。
+export type IndustryVisibility = '企业可见' | '仅平台';
+export const INDUSTRY_VISIBILITY_OPTIONS: IndustryVisibility[] = ['企业可见', '仅平台'];
 
 // ── 6 大知识板块（§3.1 + §5.7 处理速查表）────────────────────────────
 export interface KbSection {
@@ -389,7 +420,7 @@ export const mockMcpActions: McpAction[] = [
 
 // 板块"怎么处理/检索"的运营白话（只读能力总览用）
 export const BOARD_HOWTO: Record<SectionKey, { handle: string; retrieve: string }> = {
-  document: { handle: '上传后自动识别版面与表格，按章节+段落切分学习', retrieve: '按语义找最相关的段落，带出处回答' },
+  document: { handle: '上传后自动识别版面与表格，按章节+段落切分学习；也可选整篇加载，保留原文不切片', retrieve: '语义检索找最相关的段落带出处回答；整篇加载按分类整份取用' },
   faq: { handle: '一问一答整条学习，可补近义问法', retrieve: '关键词强命中标准答案，准而稳' },
   structured: { handle: '上传文件解析为记录，平台来源保留产品与规格关联', retrieve: '按编号、关键词、数值条件检索授权字段' },
   content: { handle: '网站发布后自动同步，按段落学习', retrieve: '语义+标题混合匹配，适合问答与内容生成' },
@@ -592,6 +623,7 @@ export interface KbAsset {
   sourceRef: string;       // 原文 URL / 文件名+页码 / 表名 / 标准号
   industrySourceId?: string;      // 若来自平台行业知识库导入，记录来源条目 id
   industrySourceVersion?: number; // 导入时对应的平台行业知识库版本号
+  usageModes?: UsageMode[];       // 使用方式（可多选）；未填写时按板块默认（结构化数据=精确查询，其余=语义检索）
 }
 
 // ── DataSlot: 平台行业知识库（由平台管理员统一维护，跨全部企业客户共享）──────
@@ -611,6 +643,7 @@ export interface IndustryLibraryItem {
   version: number;
   updatedAt: string;
   chunks: number;
+  usageModes?: UsageMode[]; // 导入后企业副本沿用平台的使用方式
 }
 
 export const mockIndustryLibrary: IndustryLibraryItem[] = [

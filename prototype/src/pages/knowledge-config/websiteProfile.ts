@@ -1,8 +1,45 @@
+// 字段状态：与智能体取数结果一致。只有 ready 的内容（含手动维护）提供给智能体。
+export type ProfileFieldStatus = 'ready' | 'missing' | 'pending' | 'conflict' | 'error';
+export interface ProfileConflictOption { value: string; source: string }
 export interface ProfileField {
   id: string; group: string; label: string; value: string; sourceValue: string;
   maintenancePath: string; evidence: { assetId: string; chunkId?: string; recordIndex?: number; fields?: string[] }[]; manual: boolean; suggestion?: string;
   description: string; custom?: boolean; pendingRegeneration?: boolean;
+  status?: ProfileFieldStatus;            // 未设置时按内容推断：有内容=ready，无内容=missing
+  updatedAt?: string;                     // 该字段最近整理 / 同步 / 手动保存时间
+  stale?: boolean;                        // 整理后依据又有变化，等待下一次增量更新
+  conflict?: ProfileConflictOption[];     // 来源冲突时的候选值，用户选择后解决
+  errorReason?: string;                   // 读取失败原因（不等于企业没有该信息）
+  suggestionSource?: string;              // 手动字段的“建议更新”来自哪条依据变化
 }
+
+// 字段类型：直取 = 有后台位置的字段，只通过后台接口读取、实时同步，页面只读；
+// 总结 = 由知识库内容总结；手动 = 总结字段被用户填写或修改后的内容。直取字段不能变为手动。
+export type ProfileFieldKind = '直取' | '总结' | '手动';
+export const PROFILE_FIELD_KIND_DESC: Record<ProfileFieldKind, string> = {
+  直取: '通过后台接口读取（网站信息、企业网点、荣誉资质），后台保存后立即同步。画像中只读，需在后台修改。',
+  总结: '由智能体根据当前门户已启用的知识总结；依据知识学习成功后自动增量更新。可手动填写或修改，修改后变为手动。',
+  手动: '总结字段被用户填写或修改过，视为人工确认，系统不会自动覆盖；依据变化时只给出“建议更新”。',
+};
+export const isDirectField = (field: Pick<ProfileField, 'maintenancePath'>) => !!field.maintenancePath;
+export const profileFieldKind = (field: ProfileField): ProfileFieldKind => isDirectField(field) ? '直取' : field.manual ? '手动' : '总结';
+export const profileFieldStatus = (field: ProfileField): ProfileFieldStatus => field.status ?? (field.value ? 'ready' : 'missing');
+export const PROFILE_STATUS_LABEL: Record<ProfileFieldStatus, { label: string; cls: string }> = {
+  ready: { label: '可用', cls: 'bg-green-50 text-green-700' },
+  missing: { label: '资料不足', cls: 'bg-gray-100 text-gray-600' },
+  pending: { label: '知识学习中', cls: 'bg-blue-50 text-blue-700' },
+  conflict: { label: '来源冲突', cls: 'bg-red-50 text-red-600' },
+  error: { label: '读取失败', cls: 'bg-red-50 text-red-600' },
+};
+
+// DataSlot: 画像自动更新记录（事件驱动的增量更新，按门户）
+export interface ProfileUpdateLog { siteId: string; time: string; trigger: string; action: string; fields: string[] }
+export const mockProfileUpdateLogsData: ProfileUpdateLog[] = [
+  { siteId: 'site_cn', time: '2026-11-12 00:06', trigger: '知识《KFR-35 空气滤清器图文详情》重新学习成功', action: '按依据反查，只重新生成受影响字段', fields: ['主营产品'] },
+  { siteId: 'site_cn', time: '2026-11-12 00:06', trigger: '依据《Anvil 产品白皮书.pdf》有更新', action: '“品牌定位”为手动维护，不覆盖，生成建议更新', fields: ['品牌定位'] },
+  { siteId: 'site_cn', time: '2026-11-11 15:20', trigger: '后台“企业网点”保存', action: '通过后台接口立即同步直取字段', fields: ['联系电话', '公司地址'] },
+  { siteId: 'site_cn', time: '2026-11-11 00:05', trigger: '新知识学习成功（3 条）', action: '只对资料不足的字段尝试补全；“成立时间”在两份知识中不一致，标记来源冲突', fields: ['成立时间', '定制能力'] },
+];
 export interface ProfileGroup { id: string; title: string; description: string; custom: boolean }
 export interface WebsiteProfile { siteId: string; updatedAt: string; groups: ProfileGroup[]; fields: ProfileField[] }
 // 同一原型会话中记录新增任务归属，不增加用户元数据字段。
@@ -92,8 +129,23 @@ const examples: Record<string, { value: string; evidence: ProfileField['evidence
 };
 for (const field of mockWebsiteProfilesData[0].fields) {
   const example = examples[field.id];
-  if (example) Object.assign(field, { value: example.value, sourceValue: example.value, evidence: example.evidence });
+  if (example) Object.assign(field, { value: example.value, sourceValue: example.value, evidence: example.evidence, updatedAt: field.maintenancePath ? '2026-11-11 15:20' : '2026-11-12 00:06' });
 }
+// 原型示例：覆盖各类字段状态（正式由增量更新任务写入）
+const siteCn = mockWebsiteProfilesData[0].fields;
+const patch = (id: string, value: Partial<ProfileField>) => Object.assign(siteCn.find(field => field.id === id)!, value);
+patch('field_5', { manual: true, value: '面向中小制造企业的工业设备品牌，强调选型支持与长期服务。', updatedAt: '2026-10-20 14:02',
+  suggestion: '面向企业采购的工业设备品牌，覆盖选型、交付与售后全流程服务。', suggestionSource: '《Anvil 产品白皮书.pdf》于 2026-11-12 重新学习' });
+// 来源冲突只出现在总结字段：多份知识对同一事实说法不一致
+patch('field_3', { status: 'conflict', updatedAt: '2026-11-11 00:05', conflict: [
+  { value: '成立于 2008 年。', source: '知识库 · 《Anvil 产品白皮书.pdf》p.1 · 公司简介' },
+  { value: '成立于 2010 年。', source: '知识库 · 前台页面“关于我们 / 发展历程”' },
+] });
+// 手动例子：知识库里没有正式口号，运营直接填写；系统不会覆盖
+patch('field_6', { manual: true, value: '可核对的工业设备，长期可靠的服务伙伴。', updatedAt: '2026-11-08 09:40' });
+patch('field_10', { stale: true, updatedAt: '2026-11-05 00:06' });
+patch('field_9', { status: 'pending', updatedAt: '2026-11-12 00:06' });
+patch('field_12', { status: 'error', errorReason: '知识检索服务超时', updatedAt: '2026-11-12 00:06' });
 export function reconcileWebsiteProfiles(current: WebsiteProfile[], defaults: WebsiteProfile[]): WebsiteProfile[] {
   return defaults.map(template => {
     const existing = current.find(profile => profile.siteId === template.siteId);
@@ -108,7 +160,7 @@ export function reconcileWebsiteProfiles(current: WebsiteProfile[], defaults: We
       fields: [...template.fields.map(field => {
         const old = oldFields.get(field.id);
         if (!old) return { ...field };
-        return { ...field, value: old.value, sourceValue: old.sourceValue, evidence: old.evidence, manual: old.manual, suggestion: old.suggestion, pendingRegeneration: old.pendingRegeneration };
+        return { ...field, value: old.value, sourceValue: old.sourceValue, evidence: old.evidence, manual: old.manual, suggestion: old.suggestion, suggestionSource: old.suggestionSource, pendingRegeneration: old.pendingRegeneration, status: old.status, updatedAt: old.updatedAt, stale: old.stale, conflict: old.conflict, errorReason: old.errorReason };
       }), ...customFields, ...existing.fields.filter(field => field.custom && template.groups.some(group => group.title === field.group))],
     };
   });
@@ -167,7 +219,8 @@ export function buildProfilePromptContext(profile: WebsiteProfile, scope: Profil
   return {
     siteId: profile.siteId,
     scope,
-    targetFieldIds: profile.fields.filter(field => (!fieldId || field.id === fieldId) && (scope === 'all' || !field.manual)).map(field => field.id),
+    // 直取字段由业务服务通过后台接口同步，不进入画像智能体任务
+    targetFieldIds: profile.fields.filter(field => !isDirectField(field) && (!fieldId || field.id === fieldId) && (scope === 'all' || !field.manual)).map(field => field.id),
     groups: profile.groups.map(group => ({
       id: group.id, title: group.title, description: group.description, origin: group.custom ? 'custom' : 'preset',
       fields: profile.fields.filter(field => field.group === group.title)
@@ -177,13 +230,27 @@ export function buildProfilePromptContext(profile: WebsiteProfile, scope: Profil
 }
 export function saveManualProfileField(profile: WebsiteProfile, id: string, value: string): WebsiteProfile {
   const content = requiredText(value, '内容');
-  if (!profile.fields.some(field => field.id === id)) throw new Error('画像字段不存在');
-  return { ...profile, fields: profile.fields.map(field => field.id === id ? { ...field, value: content, manual: true, suggestion: undefined, pendingRegeneration: false } : field) };
+  const target = profile.fields.find(field => field.id === id);
+  if (!target) throw new Error('画像字段不存在');
+  if (isDirectField(target)) throw new Error('直取字段只能在后台修改');
+  return { ...profile, fields: profile.fields.map(field => field.id === id ? { ...field, value: content, manual: true, suggestion: undefined, suggestionSource: undefined, pendingRegeneration: false, status: 'ready', conflict: undefined, errorReason: undefined, stale: false, updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }) } : field) };
 }
 export function regenerateFields(fields: ProfileField[], fieldId?: string, scope: ProfileGenerationScope = 'system'): ProfileField[] {
   return fields.map(field => {
     if (fieldId && field.id !== fieldId) return field;
     if (field.manual && scope === 'system') return field;
-    return { ...field, value: field.sourceValue, manual: false, suggestion: undefined, pendingRegeneration: false };
+    const now = new Date().toLocaleString('zh-CN', { hour12: false });
+    return { ...field, value: field.sourceValue, manual: false, suggestion: undefined, suggestionSource: undefined, pendingRegeneration: false,
+      status: field.sourceValue ? 'ready' : 'missing', stale: false, conflict: undefined, errorReason: undefined, updatedAt: now };
   });
+}
+
+// 来源冲突：用户选择采用的候选值，冲突解决后按系统维护继续增量更新
+export function resolveProfileConflict(profile: WebsiteProfile, id: string, value: string): WebsiteProfile {
+  return { ...profile, fields: profile.fields.map(field => field.id === id ? { ...field, value, sourceValue: value, status: 'ready', conflict: undefined, updatedAt: new Date().toLocaleString('zh-CN', { hour12: false }) } : field) };
+}
+// 手动字段的建议更新：采纳则替换内容（仍为手动维护），忽略则保留原内容
+export function applyProfileSuggestion(profile: WebsiteProfile, id: string, accept: boolean): WebsiteProfile {
+  return { ...profile, fields: profile.fields.map(field => field.id !== id || !field.suggestion ? field
+    : { ...field, value: accept ? field.suggestion : field.value, suggestion: undefined, suggestionSource: undefined, updatedAt: accept ? new Date().toLocaleString('zh-CN', { hour12: false }) : field.updatedAt }) };
 }

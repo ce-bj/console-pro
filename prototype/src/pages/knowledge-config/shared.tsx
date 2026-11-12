@@ -5,8 +5,36 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   SectionKey, KbStatus, SECTION_MAP, STATUS_LABEL, STATUS_TRANSITIONS, healthCls,
-  DateRangeKey, DATE_RANGE_OPTS,
+  DateRangeKey, DATE_RANGE_OPTS, UsageMode, USAGE_MODES, USAGE_MODE_DESC,
 } from './data';
+
+// 使用方式（可多选）：列表、详情、新增、编辑共用。不传 onChange 时只读展示；至少保留一项。
+export function UsageModeChips({ value, choices = USAGE_MODES, onChange, size = 'sm' }: {
+  value: UsageMode[]; choices?: UsageMode[]; onChange?: (next: UsageMode[]) => void; size?: 'sm' | 'md';
+}) {
+  const toggle = (mode: UsageMode) => {
+    if (!onChange) return;
+    const next = value.includes(mode) ? value.filter((m) => m !== mode) : [...value, mode];
+    if (next.length === 0) return;
+    onChange(USAGE_MODES.filter((m) => next.includes(m)));
+  };
+  const shown = onChange ? choices : USAGE_MODES.filter((m) => value.includes(m));
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shown.map((mode) => {
+        const on = value.includes(mode);
+        const cls = on ? (mode === '整篇加载' ? 'border-amber-300 bg-amber-50 text-amber-800' : mode === '精确查询' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-blue-300 bg-blue-50 text-blue-700') : 'border-gray-200 bg-white text-gray-400';
+        return (
+          <button key={mode} type="button" title={USAGE_MODE_DESC[mode]} disabled={!onChange}
+            onClick={(e) => { e.stopPropagation(); toggle(mode); }}
+            className={`rounded border whitespace-nowrap ${size === 'md' ? 'px-3 py-1.5 text-sm' : 'px-1.5 py-0.5 text-[11px]'} ${cls} ${onChange ? 'hover:border-blue-400' : 'cursor-default'}`}>
+            {onChange && (on ? '✓ ' : '')}{mode}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // 日期范围选择（今天/近7天/近30天/全部）— 事件计数类指标（调用次数、引用次数等）用
 export function DateRangeChips({ value, onChange }: { value: DateRangeKey; onChange: (v: DateRangeKey) => void }) {

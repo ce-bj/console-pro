@@ -20,6 +20,7 @@ import {
   metaChunkingEligible, doc2queryEligible, embeddingEligible,
   MetadataFieldDef, META_FIELD_TYPES, BUILTIN_METADATA_FIELDS,
   ChunkRule, generalChunkRule, mockExtraChunkRules, CONTENT_FORMATS,
+  USAGE_MODES, USAGE_MODE_DESC, mockWholeLoadSettings,
 } from './data';
 
 const mockSectionChunkRuleDefaultsData = [
@@ -71,6 +72,8 @@ export default function SectionDetailPage() {
 
   const [cfg, setCfg] = useState<Cfg | null>(s ? cfgFromSection(s) : null);
   const [saved, setSaved] = useState(false);
+  // DataSlot: 整篇加载单篇字数上限，随板块配置一起保存
+  const [wholeLoadMax, setWholeLoadMax] = useState(mockWholeLoadSettings.maxChars);
 
   // 切片解析方式：当前正在编辑哪条内容形式规则
   const [activeRuleIdx, setActiveRuleIdx] = useState(0);
@@ -138,6 +141,7 @@ export default function SectionDetailPage() {
 
   function saveCfg() {
     // ACTION: 保存板块配置（解析/清洗/检索） [PUT] /api/kb/sections/{key}/config
+    mockWholeLoadSettings.maxChars = wholeLoadMax;
     if (isStructured) Object.assign(s!, { privacyMaskEnabled: cfgNow.privacyMaskEnabled, privacyMaskTypes: [...cfgNow.privacyMaskTypes], dedupEnabled: cfgNow.dedupEnabled, dedupStrategy: cfgNow.dedupStrategy, qualityScoreThreshold: cfgNow.qualityScoreThreshold });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -248,6 +252,18 @@ export default function SectionDetailPage() {
         </div>
         <Button size="sm" variant="outline" onClick={() => navigate(`/knowledge-config/catalog?section=${board}`)}>→ 去知识资产目录管理内容</Button>
       </div>
+
+      {/* 使用方式：与板块无关，每个文件上传或编辑时多选；这里只说明三种方式并配置整篇加载上限（全局） */}
+      <Card>
+        <CardHeader className="pb-2"><CardTitle className="text-sm">使用方式</CardTitle><p className="text-xs text-gray-500">每个文件在上传时选择、可多选，之后可在列表和详情中随时调整。结构化数据可选精确查询；文档、问答没有字段，只能选语义检索或整篇加载。下方切片解析与检索策略只作用于选了“语义检索”的知识。</p></CardHeader>
+        <CardContent className="grid grid-cols-3 gap-3">
+          {USAGE_MODES.map((mode) => <div key={mode} className="rounded border p-3 text-xs">
+            <div className="flex items-center gap-2"><span className="text-sm font-medium text-gray-900">{mode}</span><Badge className="bg-gray-100 text-gray-600 font-normal">{mode === '精确查询' ? '仅结构化数据' : '全部板块'}</Badge></div>
+            <p className="mt-1 leading-5 text-gray-600">{USAGE_MODE_DESC[mode]}</p>
+            {mode === '整篇加载' && <label className="mt-2 flex items-center gap-2 text-gray-600">单篇字数上限<Input type="number" className="h-8 w-24" value={wholeLoadMax} onChange={(e) => { setWholeLoadMax(Number(e.target.value)); setSaved(false); }} />字</label>}
+          </div>)}
+        </CardContent>
+      </Card>
 
       {isStructured ? (
         <>

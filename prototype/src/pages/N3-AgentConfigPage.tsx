@@ -1254,7 +1254,7 @@ export default function AgentConfigPage() {
                   </TableBody>
                 </Table>
                 <div className="flex items-center justify-between gap-4 mt-4 pt-3 border-t">
-                  <p className="text-xs text-gray-500">关闭后，该目录不再参与此智能体的检索；不影响目录中的原始文档。</p>
+                  <div className="space-y-1 text-xs text-gray-500"><p>关闭后，该目录不再参与此智能体的检索；不影响目录中的原始文档。</p><p>另外，平台按企业所选行业提供的行业知识（不在企业目录中）默认可用，无需配置。</p></div>
                   <a href="/knowledge-config/catalog" className="text-sm text-blue-600 hover:underline shrink-0">管理知识目录 ↗</a>
                 </div>
               </CardContent>

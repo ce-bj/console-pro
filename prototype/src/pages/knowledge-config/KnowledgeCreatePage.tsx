@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import StructuredIntake, { initialStructuredDraft } from './StructuredIntake';
 import { PLATFORM_UPLOAD_ACCEPT, PLATFORM_UPLOAD_BOARDS } from './platformIndustryUpload';
+import { UsageModeChips } from './shared';
 import { registerPlatformIndustryKnowledgeDrafts } from '../N14-IndustryKnowledgePlatformPage';
 import { BackendTargetBoard, mockStructuredSourcesData, plannedBackendBoards } from './structuredSources';
 import { handleRegisterSource, mockSourceConnectionsData } from './sourceConnections';
@@ -19,7 +20,8 @@ import {
   VALIDITY_STATUSES, mockAssets, mockBackendPageSources, mockFrontendSiteTree,
   mockIndustryLibrary, secondaryCategoriesOf, upsertKnowledgeAssets, PRIMARY_INDUSTRIES,
   mockEnterpriseIndustryConfig, enterpriseIndustryList, industryLabel, mockPortalSites,
-  generalChunkRule, mockExtraChunkRules, secondaryIndustriesOf,
+  secondaryIndustriesOf,
+  UsageMode, USAGE_MODE_DESC, usageModeChoices, defaultUsageModes, mockWholeLoadSettings, IndustryVisibility, INDUSTRY_VISIBILITY_OPTIONS,
 } from './data';
 
 type CreateAction = 'file' | 'faq' | 'url' | 'frontend' | 'backend' | 'platform';
@@ -58,7 +60,7 @@ const mockPlatformKnowledgeSourcesData = mockIndustryLibrary;
 function handleCreateKnowledgeDrafts(payload: KbAsset[]) { upsertKnowledgeAssets(payload); }
 
 // ACTION: 批量创建平台行业知识草稿 [POST] /api/platform/industry-knowledge/batch
-function handleCreatePlatformIndustryKnowledgeDrafts(payload: { assets: KbAsset[]; chunkRule: string }) {
+function handleCreatePlatformIndustryKnowledgeDrafts(payload: { assets: KbAsset[]; chunkRule: string; visibility: IndustryVisibility }) {
   registerPlatformIndustryKnowledgeDrafts(payload);
 }
 
@@ -86,7 +88,8 @@ export default function KnowledgeCreatePage() {
   const [board, setBoard] = useState<SectionKey | null>(platformEntry ? null : initial && BOARD_RULES[initial]?.includes(params.get('board') as SectionKey) ? params.get('board') as SectionKey : initial === 'backend' ? null : initial ? BOARD_RULES[initial]?.[0] || null : null);
   const [backendBoards, setBackendBoards] = useState<BackendTargetBoard[]>(() => initial === 'backend' && ['content', 'structured'].includes(params.get('board') || '') ? [params.get('board') as BackendTargetBoard] : []);
   const [metadata, setMetadata] = useState<MetadataDraft>(() => platformEntry ? { ...emptyMetadata(), knowledgeBaseType: '行业知识库', audience: '企业内部', validityStatus: '现行有效', language: '简体中文' } : emptyMetadata());
-  const [selectedChunkRule, setSelectedChunkRule] = useState('通用');
+  const [usageModes, setUsageModes] = useState<UsageMode[]>([]);
+  const [visibility, setVisibility] = useState<IndustryVisibility>('企业可见');
   const [files, setFiles] = useState<File[]>([]);
   const [fileMode, setFileMode] = useState<'local' | 'object'>('local');
   const [objectName, setObjectName] = useState('');
@@ -106,9 +109,8 @@ export default function KnowledgeCreatePage() {
 
   const boardOptions: SectionKey[] = platformEntry ? [...PLATFORM_UPLOAD_BOARDS] : action ? BOARD_RULES[action] : [];
   const visibleActions = platformEntry ? ACTIONS.filter((item) => item.key === 'file') : ACTIONS;
-  const industryChunkRules = [generalChunkRule(SECTIONS.find((item) => item.key === 'document')!), ...(mockExtraChunkRules.document || [])];
   const updateMeta = (key: keyof MetadataDraft, value: string) => setMetadata((m) => ({ ...m, [key]: value, ...(key === 'industry' ? { secondaryIndustry: '请选择' } : {}), ...(key === 'knowledgeBaseType' ? { primaryCategory: '未指定', secondaryCategory: '未指定' } : {}), ...(key === 'primaryCategory' ? { secondaryCategory: '未指定' } : {}) }));
-  const setCreateAction = (next: CreateAction) => { setAction(next); setBackendBoards([]); setBoard(platformEntry ? null : BOARD_RULES[next].length === 1 ? BOARD_RULES[next][0] : null); setStructuredDraft(initialStructuredDraft(mockPortalSites[0]?.id ?? '')); setMessage(''); };
+  const setCreateAction = (next: CreateAction) => { setAction(next); setBackendBoards([]); setUsageModes([]); setBoard(platformEntry ? null : BOARD_RULES[next].length === 1 ? BOARD_RULES[next][0] : null); setStructuredDraft(initialStructuredDraft(mockPortalSites[0]?.id ?? '')); setMessage(''); };
   const toggleBackendBoard = (target: BackendTargetBoard) => {
     const next = backendBoards.includes(target) ? backendBoards.filter(value => value !== target) : [...backendBoards, target];
     setBackendBoards(next);
@@ -125,6 +127,11 @@ export default function KnowledgeCreatePage() {
   const configuredIndustries = enterpriseIndustryList(mockEnterpriseIndustryConfig);
   const availablePlatformKnowledge = mockPlatformKnowledgeSourcesData;
 
+  // 使用方式按所选知识板块给可选项：结构化数据可选精确查询；未选择时取默认
+  const tableUpload = board === 'structured';
+  const usageChoices = usageModeChoices(tableUpload);
+  const effectiveUsage = usageModes.filter((mode) => usageChoices.includes(mode)).length ? usageModes.filter((mode) => usageChoices.includes(mode)) : defaultUsageModes(tableUpload);
+
   const commonAsset = (name: string, section: SectionKey): KbAsset => {
     const kbType = (metadata.knowledgeBaseType === '请选择' ? (section === 'industry' ? '行业知识库' : section === 'faq' ? '企业公共知识库' : '企业业务知识库') : metadata.knowledgeBaseType) as KnowledgeBaseType;
     const primary = metadata.primaryCategory === '未指定' ? PRIMARY_CATEGORIES[kbType][0] : metadata.primaryCategory;
@@ -139,6 +146,7 @@ export default function KnowledgeCreatePage() {
       source: name, audience: metadata.audience === '未指定' ? '企业内部' : metadata.audience, language: metadata.language === '未指定' ? '中文' : metadata.language,
       portalSites: profileSite ? [profileSite.id] : [], businessTag: '知识问答', scene: '通用', timeliness: section === 'structured' ? '实时' : '静态', access: '内部', status: 'draft', health: 0, chunks: 0,
       createdAt: now, updatedAt: now, createdBy: '当前用户', tags: [], sourceRef: name,
+      usageModes: effectiveUsage,
     };
   };
 
@@ -181,7 +189,7 @@ export default function KnowledgeCreatePage() {
         ...commonAsset(p.name, p.section || 'industry'), industry: p.industry, knowledgeBaseType: '行业知识库' as const,
         primaryCategory: p.primaryCategory, secondaryCategory: p.secondaryCategory, contentFormat: p.contentFormat,
         validityStatus: p.validityStatus, source: p.source, sourceRef: `平台行业知识 · ${p.name}`,
-        industrySourceId: p.id, chunks: p.chunks, sync: '手动', freq: '不自动更新', nextSync: '—',
+        industrySourceId: p.id, chunks: p.chunks, sync: '手动', freq: '不自动更新', nextSync: '—', usageModes: p.usageModes,
         note: '由平台行业知识导入，已成为企业行业知识库中的独立草稿',
       };
     });
@@ -203,7 +211,7 @@ export default function KnowledgeCreatePage() {
     if (platformEntry && secondaryIndustriesOf(metadata.industry).length > 0 && metadata.secondaryIndustry === '请选择') return setMessage('请选择二级行业。');
     if (!platformEntry && action !== 'platform' && metadata.knowledgeBaseType === '请选择') return setMessage('请选择知识库类型。');
     if (!assets.length) return setMessage('请完成当前来源要求的内容选择或填写。');
-    if (platformEntry) handleCreatePlatformIndustryKnowledgeDrafts({ assets, chunkRule: board === 'document' ? selectedChunkRule : board === 'faq' ? '问答对' : '结构化记录' });
+    if (platformEntry) handleCreatePlatformIndustryKnowledgeDrafts({ assets, chunkRule: effectiveUsage.join(' + '), visibility });
     else {
       handleCreateKnowledgeDrafts(assets);
       if (profileSite && params.get('profileField')) registerProfileSupplement(profileSite.id, params.get('profileField')!, assets.map(asset => asset.id));
@@ -233,8 +241,8 @@ export default function KnowledgeCreatePage() {
         return <button key={key} aria-pressed={checked} onClick={() => {
           if (action === 'backend') toggleBackendBoard(key as BackendTargetBoard);
           else {
-            setBoard(key); setPickedFrontend(new Set());
-            if (platformEntry) { setFiles([]); setObjectName(''); setObjectPath(''); setSelectedChunkRule('通用'); setMessage(''); }
+            setBoard(key); setPickedFrontend(new Set()); setUsageModes([]);
+            if (platformEntry) { setFiles([]); setObjectName(''); setObjectPath(''); setMessage(''); }
           }
         }} className={`rounded-lg border p-3 text-left ${checked ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}>
           <div className="font-medium">{item.emoji} {item.name} {checked && '✓'}</div>
@@ -304,9 +312,14 @@ export default function KnowledgeCreatePage() {
       ))}
     </CardContent></Card>}
 
-    {action && board && action !== 'platform' && <Card><CardContent className="p-5"><div className="flex items-start justify-between mb-4"><div><h2 className="font-medium">元数据</h2><p className="text-xs text-gray-500 mt-1">{platformEntry ? "一级、二级行业需要选择；知识库类型固定为行业知识库，其余字段与企业端新增知识使用同一套枚举和规则。" : "所属行业、知识库类型需要用户选择；其余字段默认“未指定”，保存后由 AI 分析补全，用户填写值优先。"}</p></div><Badge className="bg-red-50 text-red-600 border border-red-100">"2 项必填"</Badge></div><div className="grid grid-cols-2 lg:grid-cols-4 gap-4"><SelectField required label={platformEntry ? "一级行业" : "所属行业"} value={metadata.industry} values={["请选择", ...PRIMARY_INDUSTRIES]} onChange={(v) => updateMeta("industry", v)} />{platformEntry && <SelectField required label="二级行业" value={metadata.secondaryIndustry} values={["请选择", ...secondaryIndustriesOf(metadata.industry)]} onChange={(v) => updateMeta("secondaryIndustry", v)} />}{platformEntry ? <label className="space-y-1.5 text-sm"><span className="text-gray-700">知识库类型</span><div className="flex h-9 items-center rounded-md border bg-gray-100 px-3 text-gray-600">行业知识库（平台固定）</div></label> : <SelectField required label="知识库类型" value={metadata.knowledgeBaseType} values={["请选择", "企业公共知识库", "企业业务知识库"]} onChange={(v) => updateMeta("knowledgeBaseType", v)} />}<SelectField label="一级分类" value={metadata.primaryCategory} values={['未指定', ...(metadata.knowledgeBaseType === '请选择' ? [] : PRIMARY_CATEGORIES[metadata.knowledgeBaseType as KnowledgeBaseType])]} onChange={(v) => updateMeta('primaryCategory', v)} /><SelectField label="二级分类" value={metadata.secondaryCategory} values={['未指定', ...(metadata.knowledgeBaseType === '请选择' || metadata.primaryCategory === '未指定' ? [] : secondaryCategoriesOf(metadata.knowledgeBaseType as KnowledgeBaseType, metadata.primaryCategory))]} onChange={(v) => updateMeta('secondaryCategory', v)} /><SelectField label="内容形式" value={board === 'faq' ? '问答对' : board === 'structured' ? '结构化记录' : metadata.contentFormat} values={board === 'faq' ? ['问答对'] : board === 'structured' ? ['结构化记录'] : ['未指定', ...CONTENT_FORMATS]} onChange={(v) => updateMeta('contentFormat', v)} /><SelectField label="适用对象" value={metadata.audience} values={['未指定', ...AUDIENCE_OPTIONS]} onChange={(v) => updateMeta('audience', v)} /><SelectField label="有效状态" value={metadata.validityStatus} values={['未指定', ...VALIDITY_STATUSES]} onChange={(v) => updateMeta('validityStatus', v)} /><SelectField label="语言" value={metadata.language} values={['未指定', ...LANGUAGE_OPTIONS]} onChange={(v) => updateMeta('language', v)} /></div></CardContent></Card>}
+    {action && board && action !== 'platform' && <Card><CardContent className="p-5"><div className="flex items-start justify-between mb-4"><div><h2 className="font-medium">元数据</h2><p className="text-xs text-gray-500 mt-1">{platformEntry ? "一级、二级行业需要选择；知识库类型固定为行业知识库，其余字段与企业端新增知识使用同一套枚举和规则。" : "所属行业、知识库类型需要用户选择；其余字段默认“未指定”，保存后由 AI 分析补全，用户填写值优先。"}</p></div><Badge className="bg-red-50 text-red-600 border border-red-100">"2 项必填"</Badge></div><div className="grid grid-cols-2 lg:grid-cols-4 gap-4"><SelectField required label={platformEntry ? "一级行业" : "所属行业"} value={metadata.industry} values={["请选择", ...PRIMARY_INDUSTRIES]} onChange={(v) => updateMeta("industry", v)} />{platformEntry && <SelectField required label="二级行业" value={metadata.secondaryIndustry} values={["请选择", ...secondaryIndustriesOf(metadata.industry)]} onChange={(v) => updateMeta("secondaryIndustry", v)} />}{platformEntry ? <label className="space-y-1.5 text-sm"><span className="text-gray-700">知识库类型</span><div className="flex h-9 items-center rounded-md border bg-gray-100 px-3 text-gray-600">行业知识库（平台固定）</div></label> : <SelectField required label="知识库类型" value={metadata.knowledgeBaseType} values={["请选择", "企业公共知识库", "企业业务知识库"]} onChange={(v) => updateMeta("knowledgeBaseType", v)} />}<SelectField label="一级分类" value={metadata.primaryCategory} values={['未指定', ...(metadata.knowledgeBaseType === '请选择' ? [] : PRIMARY_CATEGORIES[metadata.knowledgeBaseType as KnowledgeBaseType])]} onChange={(v) => updateMeta('primaryCategory', v)} /><SelectField label="二级分类" value={metadata.secondaryCategory} values={['未指定', ...(metadata.knowledgeBaseType === '请选择' || metadata.primaryCategory === '未指定' ? [] : secondaryCategoriesOf(metadata.knowledgeBaseType as KnowledgeBaseType, metadata.primaryCategory))]} onChange={(v) => updateMeta('secondaryCategory', v)} /><SelectField label="内容形式" value={board === 'faq' ? '问答对' : board === 'structured' ? '结构化记录' : metadata.contentFormat} values={board === 'faq' ? ['问答对'] : board === 'structured' ? ['结构化记录'] : ['未指定', ...CONTENT_FORMATS]} onChange={(v) => updateMeta('contentFormat', v)} /><SelectField label="适用对象" value={metadata.audience} values={['未指定', ...AUDIENCE_OPTIONS]} onChange={(v) => updateMeta('audience', v)} /><SelectField label="有效状态" value={metadata.validityStatus} values={['未指定', ...VALIDITY_STATUSES]} onChange={(v) => updateMeta('validityStatus', v)} /><SelectField label="语言" value={metadata.language} values={['未指定', ...LANGUAGE_OPTIONS]} onChange={(v) => updateMeta('language', v)} />{platformEntry && <SelectField required label="企业可见" value={visibility} values={INDUSTRY_VISIBILITY_OPTIONS} onChange={(v) => setVisibility(v as IndustryVisibility)} />}</div>{platformEntry && <p className="mt-3 text-xs text-gray-500">{visibility === '企业可见' ? '企业可见：发布后企业可浏览，并导入为自己的独立副本。' : '仅平台：不开放导入，企业看不到。企业的智能体按其所选行业默认可以使用，无需在 N3 配置。'}</p>}</CardContent></Card>}
 
-    {platformEntry && action && board === 'document' && <Card><CardContent className="p-5"><div className="flex items-start justify-between"><div><h2 className="font-medium">切片形式</h2><p className="mt-1 text-xs text-gray-500">使用文档知识板块已配置的解析规则。</p></div><Badge className="bg-blue-50 text-blue-700">继承文档知识配置</Badge></div><div className="mt-4 grid grid-cols-3 gap-3">{industryChunkRules.map((rule) => <button key={rule.contentFormat} onClick={() => setSelectedChunkRule(rule.contentFormat)} className={`rounded-lg border p-3 text-left ${selectedChunkRule === rule.contentFormat ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'hover:border-blue-300'}`}><div className="font-medium">{rule.contentFormat === '通用' ? '通用切片' : `${rule.contentFormat}切片`}</div><div className="mt-1 text-xs text-gray-500">{rule.chunkMethod} · {rule.chunkTokenSize} tokens</div><div className="mt-1 text-xs text-gray-400">{rule.pdfParser} · 自动关键词 {rule.autoKeywordCount}</div></button>)}</div></CardContent></Card>}
+    {action && board && action !== 'platform' && action !== 'backend' && <Card><CardContent className="p-5">
+      <div><h2 className="font-medium">使用方式（可多选）</h2><p className="mt-1 text-xs text-gray-500">每个上传的文件都要选择智能体怎么用，可多选；保存后可在列表和详情中随时调整。{tableUpload ? '结构化数据可选精确查询、语义检索、整篇加载。' : '文档知识、问答知识可选语义检索、整篇加载（没有字段，不能精确查询）。'}</p></div>
+      <div className="mt-3"><UsageModeChips size="md" value={effectiveUsage} choices={usageChoices} onChange={setUsageModes} /></div>
+      <ul className="mt-3 space-y-1 text-xs text-gray-600">{effectiveUsage.map((mode) => <li key={mode}><span className="font-medium text-gray-800">{mode}：</span>{USAGE_MODE_DESC[mode]}</li>)}</ul>
+      {effectiveUsage.includes('整篇加载') && <div className="mt-3 rounded bg-amber-50 p-3 text-xs text-amber-800">整篇加载保留原文，单篇不超过 {mockWholeLoadSettings.maxChars.toLocaleString()} 字，超出在解析时提示。</div>}
+    </CardContent></Card>}
 
     {message && <div className={`rounded-md px-4 py-3 text-sm ${message.startsWith('已保存') ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>{message}</div>}
     {(action === 'frontend' || action === 'backend') && <div className="flex flex-wrap items-center justify-between gap-4 rounded border bg-white p-4 text-sm"><div className="flex items-center gap-3"><Switch aria-label="学习启用" checked={sourceLearningEnabled} onCheckedChange={setSourceLearningEnabled} /><div><div className="font-medium">学习启用</div><div className="mt-1 text-xs text-gray-500">开启后，保存即创建并启用应用/数据源的学习关系。</div></div></div><Button variant="outline" onClick={() => navigate('/knowledge-config/sync')}>管理已有接入</Button></div>}

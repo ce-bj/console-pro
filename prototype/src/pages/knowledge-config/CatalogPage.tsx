@@ -31,9 +31,10 @@ import {
   mockIndustryLibrary, IndustryLibraryItem, enterpriseIndustryValues,
   PRIMARY_INDUSTRIES, secondaryIndustriesOf, IndustrySelection, industryLabel, isSameIndustry,
   MAX_EXTRA_INDUSTRIES, mockEnterpriseIndustryConfig, enterpriseIndustryList,
+  UsageMode, USAGE_MODES, usageModesOf, usageModeChoices, isTableContent, mockWholeLoadSettings,
   canChangeEnterpriseIndustries, nextIndustryChangeDate, setEnterpriseIndustries,
 } from './data';
-import { SectionTag, StatusActions, PageHeader } from './shared';
+import { SectionTag, StatusActions, PageHeader, UsageModeChips } from './shared';
 import { mockSourceConnectionsData } from './sourceConnections';
 
 type Row = KbAsset & { enabled: boolean };
@@ -382,6 +383,7 @@ export default function CatalogPage() {
   const [sectionFilter, setSectionFilter] = useState<'all' | SectionKey>(initialSection && SECTION_MAP[initialSection] ? initialSection : 'all');
   const [statusFilter, setStatusFilter] = useState<'all' | KbStatus>(initialStatus && STATUS_LABEL[initialStatus] ? initialStatus : 'all');
   const [connectFilter, setConnectFilter] = useState<'all' | ConnectType>('all');
+  const [usageFilter, setUsageFilter] = useState<'all' | UsageMode>('all');
   const [sourceConnectionFilter, setSourceConnectionFilter] = useState(searchParams.get('source') || 'all');
   const [knowledgeBaseTypeFilter, setKnowledgeBaseTypeFilter] = useState<'all' | KnowledgeBaseType>('all');
   const [industryFilter, setIndustryFilter] = useState<'all' | string>('all');
@@ -611,7 +613,7 @@ export default function CatalogPage() {
       return;
     }
     const original = rows.find((r) => r.id === form.id);
-    const relearnKeys: (keyof Row)[] = ['knowledgeBaseType', 'industry', 'primaryCategory', 'secondaryCategory', 'contentFormat', 'validityStatus', 'audience', 'language', 'timeliness', 'tags', 'structuredSemanticEnabled'];
+    const relearnKeys: (keyof Row)[] = ['knowledgeBaseType', 'industry', 'primaryCategory', 'secondaryCategory', 'contentFormat', 'validityStatus', 'audience', 'language', 'timeliness', 'tags', 'structuredSemanticEnabled', 'usageModes'];
     const needsRelearn = !!original && relearnKeys.some((key) => JSON.stringify(original[key]) !== JSON.stringify(form[key]));
     const updated: Row = {
       ...form,
@@ -650,6 +652,14 @@ export default function CatalogPage() {
       removeKnowledgeAsset(r.id);
       setRows((prev) => prev.filter((x) => x.id !== r.id));
     }
+  }
+
+  // 列表中直接调整使用方式；已启用知识进入待更新，重新学习成功前沿用上一版本
+  function updateRowUsage(r: Row, usageModes: UsageMode[]) {
+    // ACTION: 调整使用方式 [PATCH] /api/kb/assets/{id}/usage-modes
+    const next: Row = { ...r, usageModes, status: r.status === 'published' ? 'stale' : r.status, updatedAt: TODAY };
+    upsertKnowledgeAsset(next);
+    setRows((prev) => prev.map((x) => (x.id === r.id ? next : x)));
   }
 
   function relearn(r: Row) {
@@ -696,6 +706,7 @@ export default function CatalogPage() {
     (sectionFilter === 'all' || r.section === sectionFilter) &&
     (statusFilter === 'all' || effectiveStatus(r) === statusFilter) &&
     (connectFilter === 'all' || r.connect === connectFilter) &&
+    (usageFilter === 'all' || usageModesOf(r).includes(usageFilter)) &&
     (knowledgeBaseTypeFilter === 'all' || r.knowledgeBaseType === knowledgeBaseTypeFilter) &&
     (industryFilter === 'all' || r.industry === industryFilter) &&
     (primaryCategoryFilter === 'all' || r.primaryCategory === primaryCategoryFilter) &&
@@ -1286,7 +1297,7 @@ export default function CatalogPage() {
         news.push({
           ...newDraftAsset(item.name, item.section || 'industry', '平台', metadata, undefined, undefined, folderId),
           source: item.source,
-          industrySourceId: item.id, chunks: item.chunks, sync: '手动', freq: '不自动更新', nextSync: '—',
+          industrySourceId: item.id, chunks: item.chunks, sync: '手动', freq: '不自动更新', nextSync: '—', usageModes: item.usageModes,
           status: 'draft', sourceRef: `平台行业知识 · ${item.name}`,
           note: '由平台行业知识导入，已成为企业行业知识库中的独立草稿',
         });
@@ -1560,6 +1571,10 @@ export default function CatalogPage() {
                   <option value="all">全部来源方式</option>
                   {CONNECT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
+                <select aria-label="使用方式" value={usageFilter} onChange={(e) => setUsageFilter(e.target.value as 'all' | UsageMode)} className="h-9 px-2 rounded-md border text-sm bg-white">
+                  <option value="all">全部使用方式</option>
+                  {USAGE_MODES.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
                 <select aria-label="应用/数据源" value={sourceConnectionFilter} onChange={(e) => setSourceConnectionFilter(e.target.value)} className="h-9 max-w-64 px-2 rounded-md border text-sm bg-white">
                   <option value="all">全部应用/数据源</option>
                   {sourceConnectionOptions.map((source) => <option key={`${source.sourceId}:${source.section}`} value={source.sourceId}>{source.name}</option>)}
@@ -1713,7 +1728,7 @@ export default function CatalogPage() {
                         {(r.frontendPageId || r.backendPageId) && <div className="mt-1 max-w-64 truncate text-xs text-gray-400" title={mockSourceConnectionsData.find((source) => source.sourceId === (r.frontendPageId || r.backendPageId) && source.section === r.section)?.name || r.sourceRef}>来源：{mockSourceConnectionsData.find((source) => source.sourceId === (r.frontendPageId || r.backendPageId) && source.section === r.section)?.name || r.sourceRef}</div>}
                       </TableCell>
                       <TableCell><Badge className={`text-xs font-normal ${lifecycleConfig.cls}`}>{lifecycleConfig.label}</Badge></TableCell>
-                      <TableCell><SectionTag k={r.section} /></TableCell>
+                      <TableCell><SectionTag k={r.section} /><div className="mt-1"><UsageModeChips value={usageModesOf(r)} choices={usageModeChoices(isTableContent(r))} onChange={(next) => updateRowUsage(r, next)} /></div></TableCell>
                       <TableCell className="text-xs text-gray-600">{r.industry || '未指定'}</TableCell>
                       <TableCell className="text-xs text-gray-700 min-w-[120px]">{r.knowledgeBaseType}</TableCell>
                       <TableCell className="text-xs text-gray-600">{r.primaryCategory || '未指定'}</TableCell>
@@ -2227,6 +2242,7 @@ export default function CatalogPage() {
               <div className="grid grid-cols-2 gap-3">
                 <Field label="知识名称" className="col-span-2"><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如：退换货流程 FAQ" /></Field>
                 <Field label="知识板块"><select value={form.section} onChange={(e) => setForm({ ...form, section: e.target.value as SectionKey })} className="h-9 w-full px-2 rounded-md border text-sm bg-white">{SECTIONS.map((s) => <option key={s.key} value={s.key}>{s.index} {s.name}</option>)}</select></Field>
+                <Field label="使用方式（可多选）" className="col-span-2"><UsageModeChips size="md" value={usageModesOf(form)} choices={usageModeChoices(isTableContent(form))} onChange={(next) => setForm({ ...form, usageModes: next })} />{usageModesOf(form).includes('整篇加载') && <span className="mt-1 block text-xs text-gray-500">整篇加载保留原文，不切片、不向量化；单篇不超过 {mockWholeLoadSettings.maxChars.toLocaleString()} 字。</span>}</Field>
                 <Field label="来源方式"><select value={form.connect} onChange={(e) => setForm({ ...form, connect: e.target.value as ConnectType })} className="h-9 w-full px-2 rounded-md border text-sm bg-white">{CONNECT_TYPES.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
                 {form.connect === '前台页面' && <Field label="前台路由（必填）" className="col-span-2"><Input value={form.frontendRoute ?? ''} onChange={(e) => setForm({ ...form, frontendRoute: e.target.value || undefined })} placeholder="如：/products/kfr-35" /></Field>}
               </div>
